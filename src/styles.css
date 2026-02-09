@@ -1,3 +1,71 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --bg: 247 247 248;
+  --card: 255 255 255;
+  --text: 17 24 39;
+  --muted: 107 114 128;
+  --border: 229 231 235;
+
+  --primary: 17 24 39;
+  --accent: 133 116 64;
+  --success: 65 114 89;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.container-app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.gc-card {
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border));
+  border-radius: 18px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+}
+
+.gc-label {
+  font-size: 12px;
+  color: rgb(var(--muted));
+  font-weight: 800;
+  letter-spacing: 0.10em;
+}
+
+.gc-btn {
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.gc-btn-primary {
+  background: rgb(var(--primary));
+  color: white;
+}
+
+.gc-btn-ghost {
+  background: transparent;
+  border: 1px solid rgb(var(--border));
+  color: rgb(var(--text));
+}
+
+.gc-input {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgb(var(--border));
+  padding: 10px 12px;
+  font-size: 14px;
+  background: white;
+}
