@@ -66,6 +66,9 @@ export default function RecipeEditor() {
   const [err, setErr] = useState<string | null>(null)
 
   const [recipe, setRecipe] = useState<Recipe | null>(null)
+  const [nameDraft, setNameDraft] = useState('')
+  const [portionsDraft, setPortionsDraft] = useState('1')
+
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [lines, setLines] = useState<RecipeLine[]>([])
 
@@ -91,7 +94,11 @@ export default function RecipeEditor() {
       .eq('id', id)
       .single()
     if (error) throw error
-    setRecipe(data as Recipe)
+
+    const r = data as Recipe
+    setRecipe(r)
+    setNameDraft(r.name ?? '')
+    setPortionsDraft(String(r.portions ?? 1))
   }
 
   const loadIngredients = async () => {
@@ -160,6 +167,18 @@ export default function RecipeEditor() {
     return { totalCost, costPerPortion }
   }, [rows, recipe])
 
+  const saveHeader = async () => {
+    if (!recipeId) return
+    const p = Math.max(1, toNum(portionsDraft, 1))
+    const { error } = await supabase
+      .from('recipes')
+      .update({ name: nameDraft.trim() || 'Untitled', portions: p })
+      .eq('id', recipeId)
+
+    if (error) return alert(error.message)
+    await loadRecipe(recipeId)
+  }
+
   const onAddLine = async () => {
     if (!recipeId) return alert('Missing recipe id')
     if (!pickIngredientId) return alert('Pick an ingredient')
@@ -199,9 +218,40 @@ export default function RecipeEditor() {
     <div className="space-y-6">
       <div className="gc-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className="flex-1 min-w-[280px]">
             <div className="gc-label">RECIPE EDITOR</div>
-            <div className="mt-2 text-3xl font-extrabold tracking-tight">{recipe?.name ?? '—'}</div>
+
+            {/* ✅ Premium editable header */}
+            <div className="mt-2 flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[260px]">
+                <div className="gc-label">RECIPE NAME</div>
+                <input
+                  className="gc-input mt-2 w-full text-lg font-extrabold"
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  placeholder="Recipe name…"
+                />
+              </div>
+
+              <div className="w-40">
+                <div className="gc-label">PORTIONS</div>
+                <input
+                  className="gc-input mt-2"
+                  type="number"
+                  min={1}
+                  step="1"
+                  value={portionsDraft}
+                  onChange={(e) => setPortionsDraft(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <button className="gc-btn gc-btn-primary" onClick={saveHeader} type="button">
+                  Save
+                </button>
+              </div>
+            </div>
+
             <div className="mt-2 text-sm text-neutral-600">Ingredients + quantities + live costing preview.</div>
             <div className="mt-3 text-xs text-neutral-500">
               Kitchen ID: {kitchenId ?? '—'} · Recipe ID: {recipeId ?? '—'}
@@ -212,7 +262,8 @@ export default function RecipeEditor() {
             <div className="gc-label">COST</div>
             <div className="mt-2 text-2xl font-extrabold">{money(totals.totalCost)}</div>
             <div className="mt-2 text-xs text-neutral-500">
-              Cost / portion ({recipe?.portions ?? 1}): <span className="font-semibold">{money(totals.costPerPortion)}</span>
+              Cost / portion ({recipe?.portions ?? 1}):{' '}
+              <span className="font-semibold">{money(totals.costPerPortion)}</span>
             </div>
           </div>
         </div>
@@ -245,7 +296,7 @@ export default function RecipeEditor() {
                   <option value="">Select ingredient…</option>
                   {ingredients.map((i) => (
                     <option key={i.id} value={i.id}>
-                      {i.name}
+                      {i.name} {i.pack_unit ? `(${i.pack_unit})` : ''}
                     </option>
                   ))}
                 </select>
@@ -253,12 +304,24 @@ export default function RecipeEditor() {
 
               <div className="w-40">
                 <div className="gc-label">QTY</div>
-                <input className="gc-input mt-2" value={qty} onChange={(e) => setQty(e.target.value)} type="number" step="0.01" />
+                <input
+                  className="gc-input mt-2"
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+                  type="number"
+                  step="0.01"
+                />
               </div>
 
               <div className="w-36">
                 <div className="gc-label">UNIT</div>
-                <input className="gc-input mt-2" value={unit} onChange={(e) => setUnit(e.target.value)} />
+                <select className="gc-input mt-2" value={unit} onChange={(e) => setUnit(e.target.value)}>
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="ml">ml</option>
+                  <option value="l">L</option>
+                  <option value="pcs">pcs</option>
+                </select>
                 <div className="mt-1 text-xs text-neutral-500">g / kg / ml / L / pcs</div>
               </div>
 
@@ -306,7 +369,17 @@ export default function RecipeEditor() {
                         </td>
 
                         <td className="py-3 pr-4">
-                          <input className="gc-input w-28" value={line.unit} onChange={(e) => onUpdateLine(line.id, { unit: safeUnit(e.target.value) })} />
+                          <select
+                            className="gc-input w-28"
+                            value={line.unit}
+                            onChange={(e) => onUpdateLine(line.id, { unit: safeUnit(e.target.value) })}
+                          >
+                            <option value="g">g</option>
+                            <option value="kg">kg</option>
+                            <option value="ml">ml</option>
+                            <option value="l">L</option>
+                            <option value="pcs">pcs</option>
+                          </select>
                         </td>
 
                         <td className="py-3 pr-4">{money(net)}</td>
