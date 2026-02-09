@@ -1,4 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { supabase } from './lib/supabase'
+
+import AppLayout from './layouts/AppLayout'
 
 import Dashboard from './pages/Dashboard'
 import Ingredients from './pages/Ingredients'
@@ -8,25 +12,57 @@ import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Register from './pages/Register'
 
-export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+function AuthedApp() {
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
-        <Route path="/dashboard" element={<Dashboard />} />
+  useEffect(() => {
+    ;(async () => {
+      const { data } = await supabase.auth.getSession()
+      setUserEmail(data.session?.user?.email ?? null)
+    })()
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user?.email ?? null)
+    })
+
+    return () => {
+      sub.subscription.unsubscribe()
+    }
+  }, [])
+
+  const onSignOut = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
+
+  return (
+    <AppLayout userEmail={userEmail} onSignOut={onSignOut}>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
         <Route path="/ingredients" element={<Ingredients />} />
         <Route path="/recipes" element={<Recipes />} />
 
-        {/* ✅ IMPORTANT: This enables /recipe-editor?id=... */}
+        {/* ✅ This fixes your 404 */}
         <Route path="/recipe-editor" element={<RecipeEditor />} />
 
         <Route path="/settings" element={<Settings />} />
 
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppLayout>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        {/* App */}
+        <Route path="/*" element={<AuthedApp />} />
       </Routes>
     </BrowserRouter>
   )
