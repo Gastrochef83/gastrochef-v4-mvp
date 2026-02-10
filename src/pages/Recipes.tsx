@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { NavLink } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { Toast } from '../components/Toast'
 
@@ -163,7 +164,6 @@ export default function Recipes() {
     return m
   }, [recipes])
 
-  // Cost engine with sub-recipes
   const recipeTotalCost = useMemo(() => {
     const totals = new Map<string, number>()
     for (const r of recipes) totals.set(r.id, 0)
@@ -272,9 +272,9 @@ export default function Recipes() {
 
       await load()
 
-      // ✅ open editor using direct hash link (no JS click needed)
       if (data?.id) {
-        window.location.href = `/#/recipe-editor?id=${data.id}`
+        // ✅ NavLink style navigation, works with HashRouter
+        window.location.hash = `#/recipe-editor?id=${data.id}`
       }
     } catch (e: any) {
       showToast(e?.message ?? 'Create failed')
@@ -308,12 +308,7 @@ export default function Recipes() {
 
         <div className="mt-4">
           <div className="gc-label">SEARCH</div>
-          <input
-            className="gc-input mt-2 w-full"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search recipe name or category…"
-          />
+          <input className="gc-input mt-2 w-full" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search recipe name or category…" />
         </div>
       </div>
 
@@ -326,20 +321,6 @@ export default function Recipes() {
         </div>
       )}
 
-      {!loading && !err && filtered.length === 0 && (
-        <div className="gc-card p-10 text-center">
-          <div className="text-xl font-extrabold">No recipes yet</div>
-          <div className="mt-2 text-sm text-neutral-600">
-            Click <b>Create Recipe</b> to add your first recipe.
-          </div>
-          <div className="mt-5">
-            <button className="gc-btn gc-btn-primary" type="button" onClick={() => setCreateOpen(true)}>
-              + Create Recipe
-            </button>
-          </div>
-        </div>
-      )}
-
       {!loading && !err && filtered.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((r) => {
@@ -347,24 +328,12 @@ export default function Recipes() {
             const portions = Math.max(1, toNum(r.portions, 1))
             const cpp = total / portions
 
-            const editorHref = `/#/recipe-editor?id=${r.id}`
-
             return (
               <div key={r.id} className="gc-card p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-lg font-extrabold">{r.name}</div>
-                    <div className="mt-1 text-sm text-neutral-600">
-                      {r.category ?? '—'} · Portions: {portions}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {r.is_subrecipe && (
-                        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">Sub-Recipe</span>
-                      )}
-                      {r.is_archived && (
-                        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">Archived</span>
-                      )}
-                    </div>
+                    <div className="mt-1 text-sm text-neutral-600">{r.category ?? '—'} · Portions: {portions}</div>
                   </div>
 
                   <div className="text-right">
@@ -377,20 +346,14 @@ export default function Recipes() {
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {/* ✅ Guaranteed navigation: anchor link */}
-                  <a className="gc-btn gc-btn-primary inline-flex items-center" href={editorHref}>
+                  {/* ✅ REAL ROUTER LINK */}
+                  <NavLink className="gc-btn gc-btn-primary inline-flex items-center" to={`/recipe-editor?id=${r.id}`}>
                     Open Editor
-                  </a>
+                  </NavLink>
 
-                  {!r.is_archived ? (
-                    <button className="gc-btn gc-btn-ghost" type="button" onClick={() => toggleArchive(r.id, true)}>
-                      Archive
-                    </button>
-                  ) : (
-                    <button className="gc-btn gc-btn-ghost" type="button" onClick={() => toggleArchive(r.id, false)}>
-                      Restore
-                    </button>
-                  )}
+                  <button className="gc-btn gc-btn-ghost" type="button" onClick={() => toggleArchive(r.id, true)}>
+                    Archive
+                  </button>
                 </div>
               </div>
             )
@@ -408,7 +371,6 @@ export default function Recipes() {
                 <div>
                   <div className="gc-label">CREATE</div>
                   <div className="mt-1 text-xl font-extrabold">New Recipe</div>
-                  <div className="mt-1 text-sm text-neutral-600">Saved to your kitchen automatically.</div>
                 </div>
                 <button className="gc-btn gc-btn-ghost" type="button" onClick={() => setCreateOpen(false)}>
                   Close
@@ -428,14 +390,7 @@ export default function Recipes() {
 
                 <div>
                   <div className="gc-label">PORTIONS</div>
-                  <input
-                    className="gc-input mt-2 w-full"
-                    type="number"
-                    min={1}
-                    step="1"
-                    value={cPortions}
-                    onChange={(e) => setCPortions(e.target.value)}
-                  />
+                  <input className="gc-input mt-2 w-full" type="number" min={1} step="1" value={cPortions} onChange={(e) => setCPortions(e.target.value)} />
                 </div>
 
                 <div className="md:col-span-2 flex items-center gap-3">
@@ -454,6 +409,7 @@ export default function Recipes() {
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
