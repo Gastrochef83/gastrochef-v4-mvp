@@ -7,8 +7,14 @@ type IngredientRow = {
   name?: string
   category?: string | null
   supplier?: string | null
+
+  // ✅ موجود عندك و NOT NULL حسب الخطأ
+  pack_size?: number | null
+
+  // غالباً موجود عندك
   pack_unit?: string | null
   net_unit_cost?: number | null
+
   is_active?: boolean
   kitchen_id?: string
 }
@@ -42,7 +48,7 @@ function Modal({
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute left-1/2 top-1/2 w-[min(720px,92vw)] -translate-x-1/2 -translate-y-1/2">
+      <div className="absolute left-1/2 top-1/2 w-[min(780px,92vw)] -translate-x-1/2 -translate-y-1/2">
         <div className="gc-card p-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -83,9 +89,14 @@ export default function Ingredients() {
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+
   const [fName, setFName] = useState('')
   const [fCategory, setFCategory] = useState('')
   const [fSupplier, setFSupplier] = useState('')
+
+  // ✅ required field
+  const [fPackSize, setFPackSize] = useState('1')
+
   const [fPackUnit, setFPackUnit] = useState('g')
   const [fNetUnitCost, setFNetUnitCost] = useState('0')
   const [saving, setSaving] = useState(false)
@@ -106,13 +117,9 @@ export default function Ingredients() {
     setErr(null)
     try {
       await loadKitchen()
-
-      // ✅ schema-safe: select('*') حتى لا ينهار إذا جدولك فيه/ما فيه أعمدة إضافية
       const { data, error } = await supabase.from('ingredients').select('*').order('name', { ascending: true })
       if (error) throw error
-
-      const list = (data ?? []) as IngredientRow[]
-      setRows(list)
+      setRows((data ?? []) as IngredientRow[])
       setLoading(false)
     } catch (e: any) {
       setErr(e?.message ?? 'Unknown error')
@@ -126,11 +133,7 @@ export default function Ingredients() {
   }, [])
 
   const normalized = useMemo(() => {
-    // فلترة is_active على مستوى الواجهة
-    return rows.filter((r) => {
-      const active = r.is_active ?? true
-      return showInactive ? true : active
-    })
+    return rows.filter((r) => (showInactive ? true : (r.is_active ?? true)))
   }, [rows, showInactive])
 
   const categories = useMemo(() => {
@@ -171,6 +174,7 @@ export default function Ingredients() {
     setFName('')
     setFCategory('')
     setFSupplier('')
+    setFPackSize('1')
     setFPackUnit('g')
     setFNetUnitCost('0')
     setModalOpen(true)
@@ -181,17 +185,18 @@ export default function Ingredients() {
     setFName(r.name ?? '')
     setFCategory(r.category ?? '')
     setFSupplier(r.supplier ?? '')
+    setFPackSize(String(Math.max(1, toNum(r.pack_size, 1))))
     setFPackUnit(r.pack_unit ?? 'g')
-    setFNetUnitCost(String(toNum(r.net_unit_cost, 0)))
+    setFNetUnitCost(String(Math.max(0, toNum(r.net_unit_cost, 0))))
     setModalOpen(true)
   }
 
   const save = async () => {
     const name = fName.trim()
-    if (!name) {
-      showToast('Name is required')
-      return
-    }
+    if (!name) return showToast('Name is required')
+
+    // ✅ pack_size لازم يكون >= 1
+    const packSize = Math.max(1, toNum(fPackSize, 1))
 
     setSaving(true)
     try {
@@ -199,12 +204,15 @@ export default function Ingredients() {
         name,
         category: fCategory.trim() || null,
         supplier: fSupplier.trim() || null,
+
+        // ✅ required
+        pack_size: packSize,
+
         pack_unit: (fPackUnit || 'g').trim(),
         net_unit_cost: Math.max(0, toNum(fNetUnitCost, 0)),
         is_active: true,
       }
 
-      // kitchen_id قد يكون موجوداً في جدولك — نحاول إضافته بأمان
       if (kitchenId) payload.kitchen_id = kitchenId
 
       if (editingId) {
@@ -234,32 +242,24 @@ export default function Ingredients() {
     }
   }
 
-  // ✅ Soft delete: deactivate / restore (لا يوجد FK crash)
   const deactivate = async (id: string) => {
     const ok = confirm('Deactivate ingredient? It will be hidden from pickers.')
     if (!ok) return
     const { error } = await supabase.from('ingredients').update({ is_active: false }).eq('id', id)
-    if (error) {
-      showToast(error.message)
-      return
-    }
+    if (error) return showToast(error.message)
     showToast('Ingredient deactivated ✅')
     await load()
   }
 
   const restore = async (id: string) => {
     const { error } = await supabase.from('ingredients').update({ is_active: true }).eq('id', id)
-    if (error) {
-      showToast(error.message)
-      return
-    }
+    if (error) return showToast(error.message)
     showToast('Ingredient restored ✅')
     await load()
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="gc-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -271,11 +271,7 @@ export default function Ingredients() {
 
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-neutral-700">
-              <input
-                type="checkbox"
-                checked={showInactive}
-                onChange={(e) => setShowInactive(e.target.checked)}
-              />
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
               Show inactive
             </label>
 
@@ -288,12 +284,7 @@ export default function Ingredients() {
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <div className="min-w-[260px] flex-1">
             <div className="gc-label">SEARCH</div>
-            <input
-              className="gc-input mt-2 w-full"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or supplier…"
-            />
+            <input className="gc-input mt-2 w-full" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or supplier…" />
           </div>
 
           <div className="min-w-[240px]">
@@ -333,7 +324,6 @@ export default function Ingredients() {
 
       {!loading && !err && (
         <>
-          {/* Stats */}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="gc-card p-5">
               <div className="gc-label">ITEMS</div>
@@ -348,30 +338,19 @@ export default function Ingredients() {
             </div>
           </div>
 
-          {/* Category chips */}
           <div className="gc-card p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                className={cls('gc-btn', 'gc-btn-ghost', !category && 'ring-2 ring-black/10')}
-                type="button"
-                onClick={() => setCategory('')}
-              >
+              <button className={cls('gc-btn', 'gc-btn-ghost', !category && 'ring-2 ring-black/10')} type="button" onClick={() => setCategory('')}>
                 All
               </button>
               {categories.slice(0, 12).map((c) => (
-                <button
-                  key={c}
-                  className={cls('gc-btn', 'gc-btn-ghost', category === c && 'ring-2 ring-black/10')}
-                  type="button"
-                  onClick={() => setCategory(c)}
-                >
+                <button key={c} className={cls('gc-btn', 'gc-btn-ghost', category === c && 'ring-2 ring-black/10')} type="button" onClick={() => setCategory(c)}>
                   {c}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Table */}
           <div className="gc-card p-6">
             <div className="gc-label">LIST</div>
 
@@ -385,6 +364,7 @@ export default function Ingredients() {
                       <th className="py-2 pr-4">Name</th>
                       <th className="py-2 pr-4">Category</th>
                       <th className="py-2 pr-4">Supplier</th>
+                      <th className="py-2 pr-4">Pack</th>
                       <th className="py-2 pr-4">Unit</th>
                       <th className="py-2 pr-4">Net Unit Cost</th>
                       <th className="py-2 pr-0 text-right">Actions</th>
@@ -408,6 +388,7 @@ export default function Ingredients() {
                           </td>
                           <td className="py-3 pr-4">{r.category ?? '—'}</td>
                           <td className="py-3 pr-4">{r.supplier ?? '—'}</td>
+                          <td className="py-3 pr-4">{Math.max(1, toNum(r.pack_size, 1))}</td>
                           <td className="py-3 pr-4">{r.pack_unit ?? '—'}</td>
                           <td className="py-3 pr-4 font-semibold">{money(toNum(r.net_unit_cost, 0))}</td>
                           <td className="py-3 pr-0 text-right">
@@ -439,12 +420,7 @@ export default function Ingredients() {
         </>
       )}
 
-      {/* Modal */}
-      <Modal
-        open={modalOpen}
-        title={editingId ? 'Edit Ingredient' : 'Add Ingredient'}
-        onClose={() => setModalOpen(false)}
-      >
+      <Modal open={modalOpen} title={editingId ? 'Edit Ingredient' : 'Add Ingredient'} onClose={() => setModalOpen(false)}>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
             <div className="gc-label">NAME</div>
@@ -462,6 +438,12 @@ export default function Ingredients() {
           </div>
 
           <div>
+            <div className="gc-label">PACK SIZE</div>
+            <input className="gc-input mt-2 w-full" type="number" min={1} step="1" value={fPackSize} onChange={(e) => setFPackSize(e.target.value)} />
+            <div className="mt-1 text-xs text-neutral-500">Required (NOT NULL)</div>
+          </div>
+
+          <div>
             <div className="gc-label">UNIT</div>
             <select className="gc-input mt-2 w-full" value={fPackUnit} onChange={(e) => setFPackUnit(e.target.value)}>
               <option value="g">g</option>
@@ -474,13 +456,7 @@ export default function Ingredients() {
 
           <div>
             <div className="gc-label">NET UNIT COST</div>
-            <input
-              className="gc-input mt-2 w-full"
-              type="number"
-              step="0.0001"
-              value={fNetUnitCost}
-              onChange={(e) => setFNetUnitCost(e.target.value)}
-            />
+            <input className="gc-input mt-2 w-full" type="number" step="0.0001" value={fNetUnitCost} onChange={(e) => setFNetUnitCost(e.target.value)} />
           </div>
 
           <div className="md:col-span-2 flex justify-end gap-2">
@@ -494,7 +470,6 @@ export default function Ingredients() {
         </div>
       </Modal>
 
-      {/* ✅ Toast */}
       <Toast open={toastOpen} message={toastMsg} onClose={() => setToastOpen(false)} />
     </div>
   )
