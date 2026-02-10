@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams, NavLink } from 'react-router-dom'
+import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { Toast } from '../components/Toast'
 
@@ -76,6 +76,7 @@ function convertQty(qty: number, fromUnit: string, toUnit: string) {
 }
 
 export default function RecipeEditor() {
+  const location = useLocation()
   const [sp] = useSearchParams()
   const id = sp.get('id')
 
@@ -94,6 +95,11 @@ export default function RecipeEditor() {
   }
 
   useEffect(() => {
+    // ✅ DIAGNOSTIC: proves the page is actually mounted
+    console.log('[RecipeEditor] mounted:', location.pathname + location.search + location.hash)
+  }, [location])
+
+  useEffect(() => {
     const run = async () => {
       if (!id) {
         setErr('Missing recipe id in URL (?id=...)')
@@ -105,7 +111,6 @@ export default function RecipeEditor() {
       setErr(null)
 
       try {
-        // recipe
         const { data: r, error: rErr } = await supabase
           .from('recipes')
           .select('id,kitchen_id,name,category,portions,yield_qty,yield_unit,is_subrecipe,is_archived')
@@ -113,14 +118,12 @@ export default function RecipeEditor() {
           .single()
         if (rErr) throw rErr
 
-        // lines
         const { data: l, error: lErr } = await supabase
           .from('recipe_lines')
           .select('recipe_id,ingredient_id,sub_recipe_id,qty,unit')
           .eq('recipe_id', id)
         if (lErr) throw lErr
 
-        // ingredients (for cost preview)
         const { data: i, error: iErr } = await supabase
           .from('ingredients')
           .select('id,name,pack_unit,net_unit_cost,is_active')
@@ -146,12 +149,9 @@ export default function RecipeEditor() {
   }, [ingredients])
 
   const totalCost = useMemo(() => {
-    if (!recipe) return 0
     let sum = 0
-
     for (const l of lines) {
       const qty = toNum(l.qty, 0)
-
       if (l.ingredient_id) {
         const ing = ingById.get(l.ingredient_id)
         const packUnit = safeUnit(ing?.pack_unit ?? 'g')
@@ -159,12 +159,9 @@ export default function RecipeEditor() {
         const conv = convertQty(qty, l.unit, packUnit)
         sum += conv.value * net
       }
-
-      // NOTE: sub-recipe costing can be added here later (keep editor stable first)
     }
-
     return sum
-  }, [recipe, lines, ingById])
+  }, [lines, ingById])
 
   if (loading) {
     return <div className="gc-card p-6">Loading editor…</div>
@@ -172,10 +169,17 @@ export default function RecipeEditor() {
 
   if (err) {
     return (
-      <div className="gc-card p-6">
-        <div className="gc-label">ERROR</div>
-        <div className="mt-2 text-sm text-red-600">{err}</div>
-        <div className="mt-4">
+      <div className="gc-card p-6 space-y-3">
+        <div>
+          <div className="gc-label">ERROR</div>
+          <div className="mt-2 text-sm text-red-600">{err}</div>
+        </div>
+
+        <div className="text-xs text-neutral-500">
+          Debug: <span className="font-mono">{location.pathname + location.search}</span>
+        </div>
+
+        <div className="flex gap-2">
           <NavLink className="gc-btn gc-btn-primary" to="/recipes">
             Back to Recipes
           </NavLink>
@@ -186,20 +190,25 @@ export default function RecipeEditor() {
 
   if (!recipe) {
     return (
-      <div className="gc-card p-6">
-        <div className="gc-label">NOT FOUND</div>
-        <div className="mt-2 text-sm text-neutral-700">Recipe not found.</div>
-        <div className="mt-4">
-          <NavLink className="gc-btn gc-btn-primary" to="/recipes">
-            Back to Recipes
-          </NavLink>
+      <div className="gc-card p-6 space-y-3">
+        <div>
+          <div className="gc-label">NOT FOUND</div>
+          <div className="mt-2 text-sm text-neutral-700">Recipe not found.</div>
         </div>
+
+        <div className="text-xs text-neutral-500">
+          Debug: <span className="font-mono">{location.pathname + location.search}</span>
+        </div>
+
+        <NavLink className="gc-btn gc-btn-primary" to="/recipes">
+          Back to Recipes
+        </NavLink>
       </div>
     )
   }
 
   const portions = Math.max(1, toNum(recipe.portions, 1))
-  const cpp = totalCost / portions
+  const cpp = portions > 0 ? totalCost / portions : totalCost
 
   return (
     <div className="space-y-6">
@@ -212,6 +221,9 @@ export default function RecipeEditor() {
               {recipe.category ?? '—'} · Portions: {portions}
             </div>
             <div className="mt-2 text-xs text-neutral-500">ID: {recipe.id}</div>
+            <div className="mt-2 text-xs text-neutral-500">
+              Route: <span className="font-mono">{location.pathname + location.search}</span>
+            </div>
           </div>
 
           <div className="text-right">
@@ -236,7 +248,10 @@ export default function RecipeEditor() {
         ) : (
           <div className="mt-4 space-y-2">
             {lines.map((l, idx) => (
-              <div key={idx} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3">
+              <div
+                key={idx}
+                className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3"
+              >
                 <div className="text-sm">
                   <div className="font-semibold">
                     {l.ingredient_id ? (ingById.get(l.ingredient_id)?.name ?? 'Ingredient') : 'Sub-recipe line'}
@@ -245,11 +260,7 @@ export default function RecipeEditor() {
                     qty: {l.qty} {l.unit}
                   </div>
                 </div>
-                <button
-                  className="gc-btn gc-btn-ghost"
-                  type="button"
-                  onClick={() => showToast('Editor actions will be added next. ✅')}
-                >
+                <button className="gc-btn gc-btn-ghost" type="button" onClick={() => showToast('Next: full line editor ✅')}>
                   Edit
                 </button>
               </div>
