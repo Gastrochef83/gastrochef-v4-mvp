@@ -1,71 +1,157 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* =========================
+   GastroChef Premium Polish
+   (Menu Preview + better colors)
+   ========================= */
 
 :root {
-  --bg: 247 247 248;
-  --card: 255 255 255;
-  --text: 17 24 39;
-  --muted: 107 114 128;
-  --border: 229 231 235;
+  --gc-bg: #fafafa;
+  --gc-card: #ffffff;
+  --gc-text: #0b1220;
+  --gc-muted: #667085;
+  --gc-border: rgba(15, 23, 42, 0.10);
 
-  --primary: 17 24 39;
-  --accent: 133 116 64;
-  --success: 65 114 89;
+  --gc-primary: #0b1220;   /* deep graphite */
+  --gc-accent: #6b8f3a;    /* muted olive */
+  --gc-gold: #c9a227;      /* soft gold */
+
+  --gc-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  --gc-shadow-soft: 0 10px 25px rgba(15, 23, 42, 0.06);
 }
-
-html, body { height: 100%; }
 
 body {
-  background: rgb(var(--bg));
-  color: rgb(var(--text));
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.container-app {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px;
+  background: radial-gradient(1200px 600px at 20% -10%, rgba(107, 143, 58, 0.10), rgba(255, 255, 255, 0)) ,
+              radial-gradient(900px 450px at 90% 0%, rgba(201, 162, 39, 0.10), rgba(255, 255, 255, 0)) ,
+              var(--gc-bg);
+  color: var(--gc-text);
 }
 
 .gc-card {
-  background: rgb(var(--card));
-  border: 1px solid rgb(var(--border));
-  border-radius: 18px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+  background: var(--gc-card);
+  border: 1px solid var(--gc-border);
+  border-radius: 24px;
+  box-shadow: var(--gc-shadow-soft);
 }
 
 .gc-label {
-  font-size: 12px;
-  color: rgb(var(--muted));
+  font-size: 11px;
+  letter-spacing: 0.12em;
   font-weight: 800;
-  letter-spacing: 0.10em;
-}
-
-.gc-btn {
-  border-radius: 14px;
-  padding: 10px 14px;
-  font-weight: 700;
-  font-size: 14px;
-}
-
-.gc-btn-primary {
-  background: rgb(var(--primary));
-  color: white;
-}
-
-.gc-btn-ghost {
-  background: transparent;
-  border: 1px solid rgb(var(--border));
-  color: rgb(var(--text));
+  color: var(--gc-muted);
 }
 
 .gc-input {
-  width: 100%;
-  border-radius: 14px;
-  border: 1px solid rgb(var(--border));
-  padding: 10px 12px;
+  border: 1px solid var(--gc-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: #fff;
+  outline: none;
+}
+
+.gc-input:focus {
+  border-color: rgba(15, 23, 42, 0.28);
+  box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.08);
+}
+
+.gc-btn {
+  border-radius: 16px;
+  padding: 10px 14px;
+  font-weight: 800;
   font-size: 14px;
-  background: white;
+  border: 1px solid var(--gc-border);
+  background: #fff;
+  transition: transform 0.05s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.gc-btn:hover {
+  box-shadow: var(--gc-shadow);
+  border-color: rgba(15, 23, 42, 0.18);
+}
+
+.gc-btn:active {
+  transform: translateY(1px);
+}
+
+.gc-btn-primary {
+  background: var(--gc-primary);
+  border-color: var(--gc-primary);
+  color: white;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.22);
+}
+
+.gc-btn-ghost {
+  background: #fff;
+  color: var(--gc-text);
+}
+
+/* Menu Preview Premium */
+.gc-menu-card {
+  border: 1px solid var(--gc-border);
+  border-radius: 24px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--gc-shadow);
+}
+
+.gc-menu-hero {
+  position: relative;
+  width: 100%;
+  background: #f3f4f6;
+}
+
+.gc-menu-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(11, 18, 32, 0.55), rgba(11, 18, 32, 0));
+}
+
+.gc-menu-badges {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gc-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(11, 18, 32, 0.92);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(10px);
+}
+
+.gc-chip-dark {
+  background: rgba(11, 18, 32, 0.85);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.gc-kpi {
+  border: 1px solid var(--gc-border);
+  border-radius: 18px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, rgba(250, 250, 250, 1), rgba(255, 255, 255, 1));
+}
+
+.gc-kpi-label {
+  font-size: 11px;
+  color: var(--gc-muted);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gc-kpi-value {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--gc-text);
 }
