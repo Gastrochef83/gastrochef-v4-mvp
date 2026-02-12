@@ -79,6 +79,12 @@ function extFromType(mime: string) {
   return 'jpg'
 }
 
+function clampStr(s: string, max = 120) {
+  const x = (s ?? '').trim()
+  if (x.length <= max) return x
+  return x.slice(0, max - 1) + '…'
+}
+
 export default function RecipeEditor() {
   const location = useLocation()
   const [sp] = useSearchParams()
@@ -111,6 +117,7 @@ export default function RecipeEditor() {
   const [fat, setFat] = useState('')
 
   const [uploading, setUploading] = useState(false)
+  const [menuCompact, setMenuCompact] = useState(false)
 
   const [toastMsg, setToastMsg] = useState('')
   const [toastOpen, setToastOpen] = useState(false)
@@ -341,8 +348,13 @@ export default function RecipeEditor() {
     )
   }
 
-  const portionsN = Math.max(1, toNum(recipe.portions, 1))
+  const portionsN = Math.max(1, toNum(portions, 1))
   const cpp = totalCost / portionsN
+
+  const kcal = calories.trim() === '' ? null : Math.max(0, Math.floor(toNum(calories, 0)))
+  const p = protein.trim() === '' ? null : Math.max(0, toNum(protein, 0))
+  const c = carbs.trim() === '' ? null : Math.max(0, toNum(carbs, 0))
+  const f = fat.trim() === '' ? null : Math.max(0, toNum(fat, 0))
 
   return (
     <div className="space-y-6">
@@ -352,13 +364,13 @@ export default function RecipeEditor() {
           <div className="flex items-start gap-4">
             <div className="h-28 w-28 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100">
               {recipe.photo_url ? (
-                <img src={recipe.photo_url} alt={recipe.name} className="h-full w-full object-cover" />
+                <img src={recipe.photo_url} alt={name} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-xs text-neutral-500">No Photo</div>
               )}
             </div>
 
-            <div className="min-w-[min(520px,92vw)]">
+            <div className="min-w-[min(560px,92vw)]">
               <div className="gc-label">RECIPE</div>
 
               <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -397,8 +409,8 @@ export default function RecipeEditor() {
                       accept="image/*"
                       className="hidden"
                       onChange={(e) => {
-                        const f = e.target.files?.[0]
-                        if (f) uploadPhoto(f)
+                        const ff = e.target.files?.[0]
+                        if (ff) uploadPhoto(ff)
                         e.currentTarget.value = ''
                       }}
                       disabled={uploading}
@@ -423,6 +435,113 @@ export default function RecipeEditor() {
             <div className="mt-1 text-2xl font-extrabold">{moneyUSD(totalCost)}</div>
             <div className="mt-1 text-xs text-neutral-500">
               Cost/portion: <span className="font-semibold">{moneyUSD(cpp)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Menu Preview Premium */}
+      <div className="gc-card p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="gc-label">MENU PREVIEW</div>
+            <div className="mt-1 text-sm text-neutral-600">Premium customer-facing card.</div>
+          </div>
+
+          <button className="gc-btn gc-btn-ghost" onClick={() => setMenuCompact((v) => !v)} type="button">
+            {menuCompact ? 'Expanded view' : 'Compact view'}
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[420px_1fr]">
+          {/* Preview card */}
+          <div className="gc-menu-card">
+            <div className={`gc-menu-hero ${menuCompact ? 'h-36' : 'h-44'}`}>
+              {recipe.photo_url ? (
+                <img src={recipe.photo_url} alt={name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-neutral-500">No Photo</div>
+              )}
+              <div className="gc-menu-overlay" />
+              <div className="gc-menu-badges">
+                <span className="gc-chip gc-chip-dark">{(category || 'UNCATEGORIZED').toUpperCase()}</span>
+                {kcal != null ? <span className="gc-chip">{kcal} kcal</span> : null}
+              </div>
+            </div>
+
+            <div className="p-4">
+              <div className="text-lg font-extrabold leading-tight">{name || 'Untitled'}</div>
+
+              <div className="mt-2 text-sm text-neutral-700">
+                {description?.trim()
+                  ? clampStr(description, menuCompact ? 90 : 160)
+                  : 'Add a premium description for menu & customers…'}
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="gc-kpi">
+                  <div className="gc-kpi-label">Portions</div>
+                  <div className="gc-kpi-value">{portionsN}</div>
+                </div>
+                <div className="gc-kpi">
+                  <div className="gc-kpi-label">Cost / portion</div>
+                  <div className="gc-kpi-value">{moneyUSD(cpp)}</div>
+                </div>
+              </div>
+
+              {(p != null || c != null || f != null) && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {p != null ? <span className="gc-chip">P {p}g</span> : null}
+                  {c != null ? <span className="gc-chip">C {c}g</span> : null}
+                  {f != null ? <span className="gc-chip">F {f}g</span> : null}
+                </div>
+              )}
+
+              <div className="mt-4 text-[11px] text-neutral-500">
+                Tip: Keep description short + highlight taste, texture, and key ingredients.
+              </div>
+            </div>
+          </div>
+
+          {/* Guidance panel */}
+          <div className="space-y-4">
+            <div className="gc-card p-5">
+              <div className="gc-label">MENU COPY</div>
+              <div className="mt-2 text-sm text-neutral-700">
+                استخدم الوصف كـ “Pitch” سريع:
+                <ul className="mt-2 list-disc pl-5 text-neutral-600">
+                  <li>سطر واحد عن النكهة (smoky / creamy / fresh).</li>
+                  <li>سطر عن المكونات المميزة أو الصوص.</li>
+                  <li>سطر عن طريقة التقديم.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="gc-card p-5">
+              <div className="gc-label">QUALITY CHECK</div>
+              <div className="mt-2 text-sm text-neutral-700">
+                قبل المنيو:
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <div className="gc-kpi">
+                    <div className="gc-kpi-label">Has photo?</div>
+                    <div className="gc-kpi-value">{recipe.photo_url ? 'Yes ✅' : 'No'}</div>
+                  </div>
+                  <div className="gc-kpi">
+                    <div className="gc-kpi-label">Has method?</div>
+                    <div className="gc-kpi-value">{method.trim() ? 'Yes ✅' : 'No'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="gc-card p-5">
+              <div className="gc-label">NEXT</div>
+              <div className="mt-2 text-sm text-neutral-700">
+                الخطوة القادمة (إذا تريدها):
+                <div className="mt-2 text-neutral-600">
+                  ✅ Selling Price + Food Cost% + Margin (Premium)
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -493,7 +612,7 @@ export default function RecipeEditor() {
           </div>
 
           <div className="mt-4 text-xs text-neutral-500">
-            Tip: these values can be per-portion or per-recipe (your choice). We can standardize later.
+            Tip: values can be per-portion or per-recipe (we can standardize later).
           </div>
         </div>
 
