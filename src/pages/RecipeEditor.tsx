@@ -13,8 +13,10 @@ type Recipe = {
   yield_unit: string | null
   is_subrecipe: boolean
   is_archived: boolean
+
   photo_url?: string | null
 
+  // Premium fields
   description?: string | null
   method?: string | null
   calories?: number | null
@@ -44,11 +46,6 @@ function toNum(x: any, fallback = 0) {
   return Number.isFinite(n) ? n : fallback
 }
 
-function moneyUSD(n: number) {
-  const v = Number.isFinite(n) ? n : 0
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(v)
-}
-
 function safeUnit(u: string) {
   return (u ?? '').trim().toLowerCase() || 'g'
 }
@@ -73,14 +70,20 @@ function convertQty(qty: number, fromUnit: string, toUnit: string) {
   return qty
 }
 
+function moneyUSD(n: number) {
+  const v = Number.isFinite(n) ? n : 0
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(v)
+}
+
 function extFromType(mime: string) {
   if (mime === 'image/png') return 'png'
   if (mime === 'image/webp') return 'webp'
   return 'jpg'
 }
 
-function clampStr(s: string, max = 120) {
+function clampStr(s: string, max = 140) {
   const x = (s ?? '').trim()
+  if (!x) return ''
   if (x.length <= max) return x
   return x.slice(0, max - 1) + '…'
 }
@@ -104,21 +107,24 @@ export default function RecipeEditor() {
   const [addUnit, setAddUnit] = useState('g')
   const [savingLine, setSavingLine] = useState(false)
 
-  // Editor fields
+  // Premium editor fields
   const [savingMeta, setSavingMeta] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [menuCompact, setMenuCompact] = useState(false)
+
   const [name, setName] = useState('')
   const [category, setCategory] = useState('')
   const [portions, setPortions] = useState('1')
+
   const [description, setDescription] = useState('')
   const [method, setMethod] = useState('')
+
   const [calories, setCalories] = useState('')
   const [protein, setProtein] = useState('')
   const [carbs, setCarbs] = useState('')
   const [fat, setFat] = useState('')
 
-  const [uploading, setUploading] = useState(false)
-  const [menuCompact, setMenuCompact] = useState(false)
-
+  // Toast
   const [toastMsg, setToastMsg] = useState('')
   const [toastOpen, setToastOpen] = useState(false)
   const showToast = (msg: string) => {
@@ -157,8 +163,10 @@ export default function RecipeEditor() {
     setName(rr.name ?? '')
     setCategory(rr.category ?? '')
     setPortions(String(rr.portions ?? 1))
+
     setDescription(rr.description ?? '')
     setMethod(rr.method ?? '')
+
     setCalories(rr.calories == null ? '' : String(rr.calories))
     setProtein(rr.protein_g == null ? '' : String(rr.protein_g))
     setCarbs(rr.carbs_g == null ? '' : String(rr.carbs_g))
@@ -254,7 +262,7 @@ export default function RecipeEditor() {
       const { error } = await supabase.from('recipe_lines').insert(payload)
       if (error) throw error
 
-      showToast('Line added ✅')
+      showToast('Ingredient added ✅')
       setAddOpen(false)
       setAddIngredientId('')
       setAddQty('1')
@@ -358,7 +366,7 @@ export default function RecipeEditor() {
 
   return (
     <div className="space-y-6">
-      {/* Hero */}
+      {/* Header / Form */}
       <div className="gc-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex items-start gap-4">
@@ -371,7 +379,7 @@ export default function RecipeEditor() {
             </div>
 
             <div className="min-w-[min(560px,92vw)]">
-              <div className="gc-label">RECIPE</div>
+              <div className="gc-label">RECIPE EDITOR (PREMIUM)</div>
 
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <div>
@@ -429,7 +437,6 @@ export default function RecipeEditor() {
             </div>
           </div>
 
-          {/* Cost preview */}
           <div className="text-right">
             <div className="gc-label">COST</div>
             <div className="mt-1 text-2xl font-extrabold">{moneyUSD(totalCost)}</div>
@@ -445,7 +452,7 @@ export default function RecipeEditor() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="gc-label">MENU PREVIEW</div>
-            <div className="mt-1 text-sm text-neutral-600">Premium customer-facing card.</div>
+            <div className="mt-1 text-sm text-neutral-600">Customer-facing premium card.</div>
           </div>
 
           <button className="gc-btn gc-btn-ghost" onClick={() => setMenuCompact((v) => !v)} type="button">
@@ -454,7 +461,6 @@ export default function RecipeEditor() {
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[420px_1fr]">
-          {/* Preview card */}
           <div className="gc-menu-card">
             <div className={`gc-menu-hero ${menuCompact ? 'h-36' : 'h-44'}`}>
               {recipe.photo_url ? (
@@ -474,7 +480,7 @@ export default function RecipeEditor() {
 
               <div className="mt-2 text-sm text-neutral-700">
                 {description?.trim()
-                  ? clampStr(description, menuCompact ? 90 : 160)
+                  ? clampStr(description, menuCompact ? 90 : 170)
                   : 'Add a premium description for menu & customers…'}
               </div>
 
@@ -503,14 +509,13 @@ export default function RecipeEditor() {
             </div>
           </div>
 
-          {/* Guidance panel */}
           <div className="space-y-4">
             <div className="gc-card p-5">
-              <div className="gc-label">MENU COPY</div>
+              <div className="gc-label">MENU COPY (AR)</div>
               <div className="mt-2 text-sm text-neutral-700">
-                استخدم الوصف كـ “Pitch” سريع:
+                اكتب الوصف مثل منيو مطعم:
                 <ul className="mt-2 list-disc pl-5 text-neutral-600">
-                  <li>سطر واحد عن النكهة (smoky / creamy / fresh).</li>
+                  <li>سطر عن النكهة والقوام (smoky / creamy / fresh).</li>
                   <li>سطر عن المكونات المميزة أو الصوص.</li>
                   <li>سطر عن طريقة التقديم.</li>
                 </ul>
@@ -519,17 +524,14 @@ export default function RecipeEditor() {
 
             <div className="gc-card p-5">
               <div className="gc-label">QUALITY CHECK</div>
-              <div className="mt-2 text-sm text-neutral-700">
-                قبل المنيو:
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <div className="gc-kpi">
-                    <div className="gc-kpi-label">Has photo?</div>
-                    <div className="gc-kpi-value">{recipe.photo_url ? 'Yes ✅' : 'No'}</div>
-                  </div>
-                  <div className="gc-kpi">
-                    <div className="gc-kpi-label">Has method?</div>
-                    <div className="gc-kpi-value">{method.trim() ? 'Yes ✅' : 'No'}</div>
-                  </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div className="gc-kpi">
+                  <div className="gc-kpi-label">Has photo?</div>
+                  <div className="gc-kpi-value">{recipe.photo_url ? 'Yes ✅' : 'No'}</div>
+                </div>
+                <div className="gc-kpi">
+                  <div className="gc-kpi-label">Has method?</div>
+                  <div className="gc-kpi-value">{method.trim() ? 'Yes ✅' : 'No'}</div>
                 </div>
               </div>
             </div>
@@ -537,17 +539,15 @@ export default function RecipeEditor() {
             <div className="gc-card p-5">
               <div className="gc-label">NEXT</div>
               <div className="mt-2 text-sm text-neutral-700">
-                الخطوة القادمة (إذا تريدها):
-                <div className="mt-2 text-neutral-600">
-                  ✅ Selling Price + Food Cost% + Margin (Premium)
-                </div>
+                إذا تريد الخطوة القادمة:
+                <div className="mt-2 text-neutral-600">✅ Selling Price + Food Cost% + Margin (Premium)</div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Description + Method + Nutrition */}
+      {/* Description / Nutrition / Method */}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="gc-card p-6">
           <div className="gc-label">DESCRIPTION</div>
@@ -611,9 +611,7 @@ export default function RecipeEditor() {
             </div>
           </div>
 
-          <div className="mt-4 text-xs text-neutral-500">
-            Tip: values can be per-portion or per-recipe (we can standardize later).
-          </div>
+          <div className="mt-4 text-xs text-neutral-500">Tip: we can standardize nutrition per-portion later.</div>
         </div>
 
         <div className="gc-card p-6 lg:col-span-2">
@@ -630,7 +628,7 @@ export default function RecipeEditor() {
         </div>
       </div>
 
-      {/* Ingredients lines */}
+      {/* Ingredients / Cost lines */}
       <div className="gc-card p-6">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -670,7 +668,7 @@ export default function RecipeEditor() {
         )}
       </div>
 
-      {/* Add line modal */}
+      {/* Add ingredient modal */}
       {addOpen && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/40" onClick={() => setAddOpen(false)} />
