@@ -1,23 +1,39 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-type Recipe = { id: string; name: string; portions: number; yield_qty: number | null; yield_unit: string | null; is_archived: boolean; is_subrecipe: boolean }
-type Line = { recipe_id: string; ingredient_id: string | null; sub_recipe_id: string | null; qty: number; unit: string }
-type Ingredient = { id: string; name?: string | null; pack_unit?: string | null; net_unit_cost?: number | null; is_active?: boolean }
+type Recipe = {
+  id: string
+  name: string
+  portions: number
+  yield_qty: number | null
+  yield_unit: string | null
+  is_archived: boolean
+  is_subrecipe: boolean
+}
+
+type Line = {
+  recipe_id: string
+  ingredient_id: string | null
+  sub_recipe_id: string | null
+  qty: number
+  unit: string
+}
+
+type Ingredient = {
+  id: string
+  name?: string | null
+  pack_unit?: string | null
+  net_unit_cost?: number | null
+  is_active?: boolean
+}
 
 function toNum(x: any, fallback = 0) {
   const n = Number(x)
   return Number.isFinite(n) ? n : fallback
 }
 
-function money(n: number) {
-  const v = Number.isFinite(n) ? n : 0
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(v)
-}
-
 function safeUnit(u: string) {
-  const x = (u ?? '').trim().toLowerCase()
-  return x || 'g'
+  return (u ?? '').trim().toLowerCase() || 'g'
 }
 
 function unitFamily(u: string) {
@@ -46,7 +62,18 @@ function convertQty(qty: number, fromUnit: string, toUnit: string) {
     if (from === 'ml' && to === 'l') return { ok: true, value: qty / 1000 }
     if (from === 'l' && to === 'ml') return { ok: true, value: qty * 1000 }
   }
+
+  // pcs/portion/other: no conversion
   return { ok: true, value: qty }
+}
+
+function money(n: number, currency = 'USD') {
+  const v = Number.isFinite(n) ? n : 0
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(v)
+  } catch {
+    return `${v.toFixed(2)} ${currency}`
+  }
 }
 
 export default function Dashboard() {
@@ -86,7 +113,9 @@ export default function Dashboard() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+  }, [])
 
   const ingById = useMemo(() => {
     const m = new Map<string, Ingredient>()
@@ -100,61 +129,97 @@ export default function Dashboard() {
     return m
   }, [recipes])
 
-  const recipeTotalCost = useMemo(() => {
+  const activeRecipes = useMemo(() => recipes.filter((r) => !r.is_archived), [recipes])
+  const activeIngredientsCount = useMemo(() => ingredients.filter((i) => i.is_active !== false).length, [ingredients])
+  const subRecipeCount = useMemo(() => recipes.filter((r) => r.is_subrecipe && !r.is_archived).length, [recipes])
+
+  // === cost engine with diagnostics ===
+  const costEngine = useMemo(() => {
     const totals = new Map<string, number>()
+    const diag = {
+      unitMismatchCount: 0,
+      missingYieldSubrecipeCount: 0,
+      missingIngredientCostCount: 0,
+    }
+
     for (const r of recipes) totals.set(r.id, 0)
 
-    const maxPass = 10
+    const linesByRecipe = new Map<string, Line[]>()
+    for (const l of lines) {
+      if (!linesByRecipe.has(l.recipe_id)) linesByRecipe.set(l.recipe_id, [])
+      linesByRecipe.get(l.recipe_id)!.push(l)
+    }
+
+    const maxPass = 12
     for (let pass = 0; pass < maxPass; pass++) {
       let changed = false
 
       for (const r of recipes) {
-        const rLines = lines.filter((l) => l.recipe_id === r.id)
+        const rLines = linesByRecipe.get(r.id) ?? []
         let sum = 0
 
         for (const l of rLines) {
-          const qty = toNum(l.qty, 0)
+          const qty = Math.max(0, toNum(l.qty, 0))
+          const u = safeUnit(l.unit)
 
+          // Ingredient line
           if (l.ingredient_id) {
             const ing = ingById.get(l.ingredient_id)
-            const packUnit = safeUnit(ing?.pack_unit ?? 'g')
-            const net = toNum(ing?.net_unit_cost, 0)
-            const conv = convertQty(qty, l.unit, packUnit)
+            if (!ing || ing.is_active === false) continue
+
+            const net = toNum(ing.net_unit_cost, 0)
+            const packUnit = safeUnit(ing.pack_unit ?? 'g')
+
+            if (!Number.isFinite(net) || net <= 0) {
+              diag.missingIngredientCostCount += 1
+              continue
+            }
+
+            const conv = convertQty(qty, u, packUnit)
+            if (!conv.ok) diag.unitMismatchCount += 1
+
             sum += conv.value * net
             continue
           }
 
+          // Sub-recipe line
           if (l.sub_recipe_id) {
             const sub = recipeById.get(l.sub_recipe_id)
             const subTotal = totals.get(l.sub_recipe_id) ?? 0
-            const u = safeUnit(l.unit)
 
-            if (sub) {
-              const subPortions = Math.max(1, toNum(sub.portions, 1))
-              const cpp = subTotal / subPortions
+            if (!sub) continue
+            const subPortions = Math.max(1, toNum(sub.portions, 1))
+            const subCpp = subTotal / subPortions
 
-              if (u === 'portion') {
-                sum += qty * cpp
-                continue
-              }
-
-              const yq = toNum(sub.yield_qty, 0)
-              const yu = safeUnit(sub.yield_unit ?? '')
-              if (yq > 0 && yu) {
-                const costPerYieldUnit = subTotal / yq
-                const conv = convertQty(qty, l.unit, yu)
-                sum += conv.value * costPerYieldUnit
-                continue
-              }
-
-              sum += qty * cpp
+            // If line uses "portion"
+            if (u === 'portion') {
+              sum += qty * subCpp
               continue
             }
+
+            // If subrecipe has yield => use yield-based costing
+            const yq = toNum(sub.yield_qty, 0)
+            const yu = safeUnit(sub.yield_unit ?? '')
+
+            if (yq > 0 && yu && (unitFamily(u) === unitFamily(yu))) {
+              const costPerYieldUnit = subTotal / yq
+              const conv = convertQty(qty, u, yu)
+              if (!conv.ok) diag.unitMismatchCount += 1
+              sum += conv.value * costPerYieldUnit
+              continue
+            }
+
+            // Missing yield (but line is not portion)
+            if (sub.is_subrecipe) diag.missingYieldSubrecipeCount += 1
+
+            // Fallback to cpp
+            sum += qty * subCpp
+            continue
           }
         }
 
         const prev = totals.get(r.id) ?? 0
-        if (Math.abs(prev - sum) > 1e-9) {
+        if (Math.abs(prev - sum) > 1e-7) {
           totals.set(r.id, sum)
           changed = true
         }
@@ -163,11 +228,11 @@ export default function Dashboard() {
       if (!changed) break
     }
 
-    return totals
+    return { totals, diag }
   }, [recipes, lines, ingById, recipeById])
 
-  const activeRecipes = useMemo(() => recipes.filter((r) => !r.is_archived), [recipes])
-  const activeIngredientsCount = useMemo(() => ingredients.filter((i) => (i.is_active ?? true)).length, [ingredients])
+  const recipeTotalCost = costEngine.totals
+  const diag = costEngine.diag
 
   const avgCostPerPortion = useMemo(() => {
     if (activeRecipes.length === 0) return 0
@@ -180,25 +245,61 @@ export default function Dashboard() {
   }, [activeRecipes, recipeTotalCost])
 
   const mostExpensiveRecipe = useMemo(() => {
-    let best: { name: string; total: number } | null = null
+    let best: { id: string; name: string; total: number } | null = null
     for (const r of activeRecipes) {
       const total = recipeTotalCost.get(r.id) ?? 0
-      if (!best || total > best.total) best = { name: r.name, total }
+      if (!best || total > best.total) best = { id: r.id, name: r.name, total }
     }
     return best
   }, [activeRecipes, recipeTotalCost])
 
-  const subRecipeCount = useMemo(() => recipes.filter((r) => r.is_subrecipe && !r.is_archived).length, [recipes])
+  const cheapestRecipe = useMemo(() => {
+    let best: { id: string; name: string; total: number } | null = null
+    for (const r of activeRecipes) {
+      const total = recipeTotalCost.get(r.id) ?? 0
+      if (!best || total < best.total) best = { id: r.id, name: r.name, total }
+    }
+    return best
+  }, [activeRecipes, recipeTotalCost])
+
+  const totalActiveCost = useMemo(() => {
+    return activeRecipes.reduce((sum, r) => sum + (recipeTotalCost.get(r.id) ?? 0), 0)
+  }, [activeRecipes, recipeTotalCost])
+
+  const top5 = useMemo(() => {
+    return [...activeRecipes]
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        total: recipeTotalCost.get(r.id) ?? 0,
+        cpp: (recipeTotalCost.get(r.id) ?? 0) / Math.max(1, toNum(r.portions, 1)),
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
+  }, [activeRecipes, recipeTotalCost])
+
+  const subRecipesMissingYield = useMemo(() => {
+    return recipes
+      .filter((r) => r.is_subrecipe && !r.is_archived)
+      .filter((r) => toNum(r.yield_qty, 0) <= 0 || !safeUnit(r.yield_unit ?? ''))
+  }, [recipes])
+
+  // Detect insane costs (to help you debug pack_unit/net_unit_cost)
+  const hasOutliers = useMemo(() => {
+    const big = top5.find((x) => x.total > 10000) // threshold
+    return !!big
+  }, [top5])
 
   return (
     <div className="space-y-6">
       <div className="gc-card p-6">
-        <div className="gc-label">DASHBOARD (UPGRADE D)</div>
+        <div className="gc-label">DASHBOARD (UPGRADE PRO)</div>
         <div className="mt-2 text-2xl font-extrabold">Overview</div>
-        <div className="mt-2 text-sm text-neutral-600">KPIs with sub-recipe costing and unit conversion.</div>
+        <div className="mt-2 text-sm text-neutral-600">KPIs + diagnostics (yield-based sub-recipes + unit checks).</div>
       </div>
 
       {loading && <div className="gc-card p-6">Loading…</div>}
+
       {err && (
         <div className="gc-card p-6">
           <div className="gc-label">ERROR</div>
@@ -207,37 +308,105 @@ export default function Dashboard() {
       )}
 
       {!loading && !err && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <div className="gc-card p-5">
-            <div className="gc-label">RECIPES</div>
-            <div className="mt-2 text-2xl font-extrabold">{activeRecipes.length}</div>
-            <div className="mt-1 text-xs text-neutral-500">Active</div>
-          </div>
+        <>
+          {hasOutliers && (
+            <div className="gc-card p-6">
+              <div className="gc-label">WARNING</div>
+              <div className="mt-2 text-sm text-amber-700">
+                Some recipe costs are extremely high. This is usually caused by an incorrect <span className="font-semibold">pack_unit</span> or{' '}
+                <span className="font-semibold">net_unit_cost</span> (e.g., cost per kg but pack_unit set to g).
+              </div>
+            </div>
+          )}
 
-          <div className="gc-card p-5">
-            <div className="gc-label">SUB-RECIPES</div>
-            <div className="mt-2 text-2xl font-extrabold">{subRecipeCount}</div>
-            <div className="mt-1 text-xs text-neutral-500">Active</div>
-          </div>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="gc-card p-5">
+              <div className="gc-label">RECIPES</div>
+              <div className="mt-2 text-2xl font-extrabold">{activeRecipes.length}</div>
+              <div className="mt-1 text-xs text-neutral-500">Active</div>
+            </div>
 
-          <div className="gc-card p-5">
-            <div className="gc-label">INGREDIENTS</div>
-            <div className="mt-2 text-2xl font-extrabold">{activeIngredientsCount}</div>
-            <div className="mt-1 text-xs text-neutral-500">Active</div>
-          </div>
+            <div className="gc-card p-5">
+              <div className="gc-label">SUB-RECIPES</div>
+              <div className="mt-2 text-2xl font-extrabold">{subRecipeCount}</div>
+              <div className="mt-1 text-xs text-neutral-500">Active</div>
+            </div>
 
-          <div className="gc-card p-5">
-            <div className="gc-label">AVG COST / PORTION</div>
-            <div className="mt-2 text-2xl font-extrabold">{money(avgCostPerPortion)}</div>
-            <div className="mt-1 text-xs text-neutral-500">Across active recipes</div>
-          </div>
+            <div className="gc-card p-5">
+              <div className="gc-label">INGREDIENTS</div>
+              <div className="mt-2 text-2xl font-extrabold">{activeIngredientsCount}</div>
+              <div className="mt-1 text-xs text-neutral-500">Active</div>
+            </div>
 
-          <div className="gc-card p-5 md:col-span-4">
-            <div className="gc-label">MOST EXPENSIVE RECIPE</div>
-            <div className="mt-2 text-lg font-extrabold">{mostExpensiveRecipe?.name ?? '—'}</div>
-            <div className="mt-1 text-xs text-neutral-500">{money(mostExpensiveRecipe?.total ?? 0)}</div>
+            <div className="gc-card p-5">
+              <div className="gc-label">AVG COST / PORTION</div>
+              <div className="mt-2 text-2xl font-extrabold">{money(avgCostPerPortion)}</div>
+              <div className="mt-1 text-xs text-neutral-500">Across active recipes</div>
+            </div>
+
+            <div className="gc-card p-5 md:col-span-2">
+              <div className="gc-label">TOTAL ACTIVE COST</div>
+              <div className="mt-2 text-2xl font-extrabold">{money(totalActiveCost)}</div>
+              <div className="mt-1 text-xs text-neutral-500">Sum of all active recipe totals</div>
+            </div>
+
+            <div className="gc-card p-5">
+              <div className="gc-label">CHEAPEST RECIPE</div>
+              <div className="mt-2 text-lg font-extrabold">{cheapestRecipe?.name ?? '—'}</div>
+              <div className="mt-1 text-xs text-neutral-500">{money(cheapestRecipe?.total ?? 0)}</div>
+            </div>
+
+            <div className="gc-card p-5">
+              <div className="gc-label">MOST EXPENSIVE</div>
+              <div className="mt-2 text-lg font-extrabold">{mostExpensiveRecipe?.name ?? '—'}</div>
+              <div className="mt-1 text-xs text-neutral-500">{money(mostExpensiveRecipe?.total ?? 0)}</div>
+            </div>
+
+            <div className="gc-card p-5 md:col-span-4">
+              <div className="gc-label">TOP 5 RECIPES BY TOTAL COST</div>
+              <div className="mt-3 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+                <div className="grid grid-cols-[1.2fr_.6fr_.6fr] gap-0 border-b border-neutral-200 bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600">
+                  <div>Recipe</div>
+                  <div className="text-right">Total</div>
+                  <div className="text-right">Cost/Portion</div>
+                </div>
+                <div className="divide-y divide-neutral-200">
+                  {top5.map((x) => (
+                    <div key={x.id} className="grid grid-cols-[1.2fr_.6fr_.6fr] items-center px-4 py-3 text-sm">
+                      <div className="font-semibold">{x.name}</div>
+                      <div className="text-right">{money(x.total)}</div>
+                      <div className="text-right">{money(x.cpp)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="gc-card p-5 md:col-span-4">
+              <div className="gc-label">DIAGNOSTICS</div>
+              <div className="mt-2 grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                  <div className="text-xs font-semibold text-neutral-600">Unit mismatches</div>
+                  <div className="mt-1 text-2xl font-extrabold">{diag.unitMismatchCount}</div>
+                </div>
+                <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                  <div className="text-xs font-semibold text-neutral-600">Missing yield (sub-recipes)</div>
+                  <div className="mt-1 text-2xl font-extrabold">{subRecipesMissingYield.length}</div>
+                </div>
+                <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                  <div className="text-xs font-semibold text-neutral-600">Ingredients missing cost</div>
+                  <div className="mt-1 text-2xl font-extrabold">{diag.missingIngredientCostCount}</div>
+                </div>
+              </div>
+
+              {subRecipesMissingYield.length > 0 && (
+                <div className="mt-4 text-sm text-amber-700">
+                  Missing yield examples: {subRecipesMissingYield.slice(0, 6).map((x) => x.name).join(', ')}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
