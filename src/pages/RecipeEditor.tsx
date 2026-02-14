@@ -18,7 +18,7 @@ type Recipe = {
   method?: string | null
   method_steps?: string[] | null
 
-  // ✅ NEW: step photos (same order as method_steps)
+  // ✅ NEW (optional column)
   method_step_photos?: string[] | null
 
   calories?: number | null
@@ -129,6 +129,9 @@ export default function RecipeEditor() {
   const [savingMeta, setSavingMeta] = useState(false)
   const [uploading, setUploading] = useState(false)
 
+  // ✅ NEW: upload state for step photos
+  const [stepUploading, setStepUploading] = useState(false)
+
   // Form fields
   const [name, setName] = useState('')
   const [category, setCategory] = useState('')
@@ -137,9 +140,11 @@ export default function RecipeEditor() {
 
   // Steps
   const [steps, setSteps] = useState<string[]>([])
-  const [stepPhotos, setStepPhotos] = useState<string[]>([]) // ✅ NEW
   const [newStep, setNewStep] = useState('')
   const [methodLegacy, setMethodLegacy] = useState('')
+
+  // ✅ NEW: step photos aligned to steps
+  const [stepPhotos, setStepPhotos] = useState<string[]>([])
 
   // Nutrition per portion (manual only)
   const [calories, setCalories] = useState('')
@@ -192,20 +197,30 @@ export default function RecipeEditor() {
   // Recursive cache of recipe_lines for referenced subrecipes
   const [recipeLinesCache, setRecipeLinesCache] = useState<Record<string, Line[]>>({})
 
+  // ✅ helper: align photos with steps length
+  const alignStepPhotos = (cleanSteps: string[], photos: string[] | null | undefined) => {
+    const p = (photos ?? []).map((x) => (x ?? '').trim())
+    return cleanSteps.map((_, idx) => p[idx] ?? '')
+  }
+
   const loadAll = async (recipeId: string) => {
-    // try select with method_step_photos; if column missing, fallback.
-    const selWith = 'id,kitchen_id,name,category,portions,yield_qty,yield_unit,is_subrecipe,is_archived,photo_url,description,method,method_steps,method_step_photos,calories,protein_g,carbs_g,fat_g,selling_price,currency,target_food_cost_pct'
-    const selNo = 'id,kitchen_id,name,category,portions,yield_qty,yield_unit,is_subrecipe,is_archived,photo_url,description,method,method_steps,calories,protein_g,carbs_g,fat_g,selling_price,currency,target_food_cost_pct'
+    // ✅ Try selecting method_step_photos, fallback if column doesn't exist
+    const selectWithPhotos =
+      'id,kitchen_id,name,category,portions,yield_qty,yield_unit,is_subrecipe,is_archived,photo_url,description,method,method_steps,method_step_photos,calories,protein_g,carbs_g,fat_g,selling_price,currency,target_food_cost_pct'
+    const selectNoPhotos =
+      'id,kitchen_id,name,category,portions,yield_qty,yield_unit,is_subrecipe,is_archived,photo_url,description,method,method_steps,calories,protein_g,carbs_g,fat_g,selling_price,currency,target_food_cost_pct'
 
     let r: any = null
     let rErr: any = null
+
     {
-      const res = await supabase.from('recipes').select(selWith).eq('id', recipeId).single()
+      const res = await supabase.from('recipes').select(selectWithPhotos).eq('id', recipeId).single()
       r = res.data
       rErr = res.error
     }
+
     if (rErr && String(rErr.message || '').toLowerCase().includes('method_step_photos')) {
-      const res2 = await supabase.from('recipes').select(selNo).eq('id', recipeId).single()
+      const res2 = await supabase.from('recipes').select(selectNoPhotos).eq('id', recipeId).single()
       r = res2.data
       rErr = res2.error
     }
@@ -227,7 +242,7 @@ export default function RecipeEditor() {
 
     const { data: rs, error: rsErr } = await supabase
       .from('recipes')
-      .select(selNo) // keep compatible list
+      .select(selectNoPhotos) // list doesn't need step photos
       .eq('kitchen_id', (r as any).kitchen_id)
       .order('name', { ascending: true })
     if (rsErr) throw rsErr
@@ -247,14 +262,12 @@ export default function RecipeEditor() {
     setPortions(String(rr.portions ?? 1))
     setDescription(rr.description ?? '')
 
-    const s = normalizeSteps(rr.method_steps)
-    setSteps(s)
+    const cleanSteps = normalizeSteps(rr.method_steps)
+    setSteps(cleanSteps)
     setMethodLegacy(rr.method ?? '')
 
-    // ✅ align photos with steps
-    const rawPhotos = (rr.method_step_photos ?? []) as string[]
-    const aligned = s.map((_, idx) => (rawPhotos[idx] ?? '').trim())
-    setStepPhotos(aligned)
+    // ✅ NEW: load step photos aligned
+    setStepPhotos(alignStepPhotos(cleanSteps, rr.method_step_photos))
 
     setCalories(rr.calories == null ? '' : String(rr.calories))
     setProtein(rr.protein_g == null ? '' : String(rr.protein_g))
@@ -474,14 +487,14 @@ export default function RecipeEditor() {
   }
 
   // -------------------------
-  // Save recipe meta (includes sub-recipe + yield + step photos)
+  // Save recipe meta (includes sub-recipe + yield + ✅ step photos)
   // -------------------------
   const saveMeta = async () => {
     if (!id) return
     setSavingMeta(true)
     try {
       const cleanSteps = normalizeSteps(steps)
-      const cleanPhotos = cleanSteps.map((_, idx) => (stepPhotos[idx] ?? '').trim())
+      const cleanStepPhotos = alignStepPhotos(cleanSteps, stepPhotos)
 
       const payload: any = {
         name: name.trim() || 'Untitled',
@@ -492,8 +505,8 @@ export default function RecipeEditor() {
         method_steps: cleanSteps,
         method: methodLegacy.trim() || null,
 
-        // ✅ step photos
-        method_step_photos: cleanPhotos,
+        // ✅ NEW
+        method_step_photos: cleanStepPhotos,
 
         calories: calories.trim() === '' ? null : Math.max(0, Math.floor(toNum(calories, 0))),
         protein_g: protein.trim() === '' ? null : Math.max(0, toNum(protein, 0)),
@@ -512,7 +525,7 @@ export default function RecipeEditor() {
 
       let { error } = await supabase.from('recipes').update(payload).eq('id', id)
 
-      // fallback if column not present
+      // ✅ fallback if column doesn't exist
       if (error && String(error.message || '').toLowerCase().includes('method_step_photos')) {
         delete payload.method_step_photos
         ;({ error } = await supabase.from('recipes').update(payload).eq('id', id))
@@ -607,19 +620,19 @@ export default function RecipeEditor() {
   }
 
   // -------------------------
-  // Steps + Photos
+  // Steps
   // -------------------------
   const addStep = () => {
     const s = newStep.trim()
     if (!s) return
     setSteps((prev) => [...prev, s])
-    setStepPhotos((prev) => [...prev, ''])
+    setStepPhotos((prev) => [...prev, '']) // ✅ keep aligned
     setNewStep('')
   }
   const updateStep = (idx: number, value: string) => setSteps((prev) => prev.map((x, i) => (i === idx ? value : x)))
   const removeStep = (idx: number) => {
     setSteps((prev) => prev.filter((_, i) => i !== idx))
-    setStepPhotos((prev) => prev.filter((_, i) => i !== idx))
+    setStepPhotos((prev) => prev.filter((_, i) => i !== idx)) // ✅ keep aligned
   }
   const moveStep = (idx: number, dir: -1 | 1) => {
     setSteps((prev) => {
@@ -636,37 +649,6 @@ export default function RecipeEditor() {
       ;[next[idx], next[j]] = [next[j], next[idx]]
       return next
     })
-  }
-
-  const uploadStepPhoto = async (stepIdx: number, file: File) => {
-    if (!id) return
-    setUploading(true)
-    try {
-      const ext = extFromType(file.type)
-      const key = `recipes/${id}/steps/${stepIdx + 1}-${Date.now()}.${ext}`
-
-      const { error: upErr } = await supabase.storage.from('recipe-photos').upload(key, file, {
-        upsert: true,
-        contentType: file.type,
-      })
-      if (upErr) throw upErr
-
-      const { data: pub } = supabase.storage.from('recipe-photos').getPublicUrl(key)
-      const url = pub?.publicUrl
-      if (!url) throw new Error('Failed to get public url')
-
-      setStepPhotos((prev) => prev.map((x, i) => (i === stepIdx ? url : x)))
-      showToast(`Step ${stepIdx + 1} photo set ✅ (press Save)`)
-    } catch (e: any) {
-      showToast(e?.message ?? 'Upload failed')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const removeStepPhoto = (stepIdx: number) => {
-    setStepPhotos((prev) => prev.map((x, i) => (i === stepIdx ? '' : x)))
-    showToast(`Step ${stepIdx + 1} photo removed (press Save)`)
   }
 
   // -------------------------
@@ -700,8 +682,40 @@ export default function RecipeEditor() {
     }
   }
 
+  // ✅ NEW: Upload step photo (one per step)
+  const uploadStepPhoto = async (stepIdx: number, file: File) => {
+    if (!id) return
+    setStepUploading(true)
+    try {
+      const ext = extFromType(file.type)
+      const key = `recipes/${id}/steps/${stepIdx + 1}-${Date.now()}.${ext}`
+
+      const { error: upErr } = await supabase.storage.from('recipe-photos').upload(key, file, {
+        upsert: true,
+        contentType: file.type,
+      })
+      if (upErr) throw upErr
+
+      const { data: pub } = supabase.storage.from('recipe-photos').getPublicUrl(key)
+      const url = pub?.publicUrl
+      if (!url) throw new Error('Failed to get public url')
+
+      setStepPhotos((prev) => prev.map((x, i) => (i === stepIdx ? url : x)))
+      showToast(`Step ${stepIdx + 1} photo set ✅ (press Save to store)`)
+    } catch (e: any) {
+      showToast(e?.message ?? 'Step upload failed')
+    } finally {
+      setStepUploading(false)
+    }
+  }
+
+  const removeStepPhoto = (stepIdx: number) => {
+    setStepPhotos((prev) => prev.map((x, i) => (i === stepIdx ? '' : x)))
+    showToast(`Step ${stepIdx + 1} photo removed (press Save)`)
+  }
+
   // -------------------------
-  // Lines CRUD (unchanged)
+  // Lines CRUD
   // -------------------------
   const addLineInline = async () => {
     if (!id) return
@@ -903,7 +917,9 @@ export default function RecipeEditor() {
     if (!id) return
     setReorderSaving(true)
     try {
-      const tasks = ordered.map((x, idx) => supabase.from('recipe_lines').update({ sort_order: (idx + 1) * 10 }).eq('id', x.id).eq('recipe_id', id))
+      const tasks = ordered.map((x, idx) =>
+        supabase.from('recipe_lines').update({ sort_order: (idx + 1) * 10 }).eq('id', x.id).eq('recipe_id', id)
+      )
       const results = await Promise.all(tasks)
       const bad = results.find((r) => r.error)
       if (bad?.error) throw bad.error
@@ -1044,7 +1060,7 @@ export default function RecipeEditor() {
             </div>
 
             <div className="min-w-[min(640px,92vw)]">
-              <div className="gc-label">RECIPE EDITOR (SUB-RECIPES TREE + YIELD SMART + STEP PHOTOS)</div>
+              <div className="gc-label">RECIPE EDITOR (SUB-RECIPES TREE + YIELD SMART)</div>
 
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <div>
@@ -1109,7 +1125,16 @@ export default function RecipeEditor() {
 
                   <div>
                     <div className="gc-label">YIELD QTY</div>
-                    <input className="gc-input mt-2 w-full" type="number" min={0} step="0.01" value={yieldQty} onChange={(e) => setYieldQty(e.target.value)} disabled={!isSubRecipe} placeholder="e.g., 500" />
+                    <input
+                      className="gc-input mt-2 w-full"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={yieldQty}
+                      onChange={(e) => setYieldQty(e.target.value)}
+                      disabled={!isSubRecipe}
+                      placeholder="e.g., 500"
+                    />
                   </div>
 
                   <div>
@@ -1124,7 +1149,9 @@ export default function RecipeEditor() {
                   </div>
                 </div>
 
-                {isSubRecipe && (yieldQty.trim() === '' || !yieldUnit) ? <div className="mt-2 text-xs text-amber-700">Tip: set Yield Qty + Unit then press Save.</div> : null}
+                {isSubRecipe && (yieldQty.trim() === '' || !yieldUnit) ? (
+                  <div className="mt-2 text-xs text-amber-700">Tip: set Yield Qty + Unit then press Save.</div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -1239,7 +1266,7 @@ export default function RecipeEditor() {
         </div>
       </div>
 
-      {/* Step Builder + Step Photos ✅ */}
+      {/* Step Builder (✅ WITH PHOTOS) */}
       <div className="gc-card p-6">
         <div className="gc-label">STEP BUILDER (WITH PHOTOS)</div>
 
@@ -1286,16 +1313,17 @@ export default function RecipeEditor() {
 
                   <textarea className="gc-input mt-3 w-full min-h-[90px]" value={s} onChange={(e) => updateStep(idx, e.target.value)} />
 
+                  {/* ✅ Step Photo block */}
                   <div className="mt-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-xs font-semibold text-neutral-600">STEP PHOTO</div>
-                        <div className="text-xs text-neutral-500">Upload one image per step. Press Save to store it in DB.</div>
+                        <div className="text-xs text-neutral-500">Upload one image per step (stored when you press Save).</div>
                       </div>
 
                       <div className="flex gap-2">
                         <label className="gc-btn gc-btn-ghost cursor-pointer">
-                          {uploading ? 'Uploading…' : 'Upload'}
+                          {stepUploading ? 'Uploading…' : 'Upload'}
                           <input
                             type="file"
                             accept="image/*"
@@ -1305,7 +1333,7 @@ export default function RecipeEditor() {
                               if (ff) uploadStepPhoto(idx, ff)
                               e.currentTarget.value = ''
                             }}
-                            disabled={uploading}
+                            disabled={stepUploading}
                           />
                         </label>
 
@@ -1330,17 +1358,295 @@ export default function RecipeEditor() {
         )}
       </div>
 
-      {/* LINES (your existing block) */}
-      {/* ✅ keep as-is: everything below this point is unchanged in behavior */}
+      {/* LINES */}
       <div className="gc-card p-6">
-        {/* ... your existing LINES UI exactly like before ... */}
-        {/* To keep response short, I kept your LINES section unchanged conceptually.
-            If you want: tell me "send full file with lines block included"
-            and I'll paste the complete remaining JSX exactly. */}
-        <div className="gc-label">LINES</div>
-        <div className="mt-2 text-sm text-neutral-600">
-          You already have the full Lines Pro block in your old file. Keep it below this point unchanged.
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="gc-label">LINES (INGREDIENTS + SUB-RECIPES)</div>
+            <div className="mt-1 text-sm text-neutral-600">Inline add · Groups · Notes · Reorder · Duplicate · Expand breakdown.</div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-neutral-500">{reorderSaving ? 'Saving order…' : ''}</div>
+            <button className="gc-btn gc-btn-ghost" type="button" onClick={() => loadAll(id!)}>
+              Refresh
+            </button>
+          </div>
         </div>
+
+        {/* Inline Add */}
+        <div className="mt-4 grid gap-3 lg:grid-cols-[.7fr_1.6fr_.6fr_1fr_auto]">
+          <div>
+            <div className="gc-label">TYPE</div>
+            <select className="gc-input mt-2 w-full" value={addType} onChange={(e) => setAddType(e.target.value as any)}>
+              <option value="ingredient">Ingredient</option>
+              <option value="subrecipe">Sub-recipe</option>
+            </select>
+          </div>
+
+          <div>
+            <div className="gc-label">{addType === 'ingredient' ? 'INGREDIENT' : 'SUB-RECIPE'}</div>
+            {addType === 'ingredient' ? (
+              <>
+                <input className="gc-input mt-2 w-full" value={ingSearch} onChange={(e) => setIngSearch(e.target.value)} placeholder="Filter ingredients…" />
+                <select className="gc-input mt-2 w-full" value={addIngredientId} onChange={(e) => setAddIngredientId(e.target.value)}>
+                  <option value="">Select ingredient…</option>
+                  {filteredIngredients.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name ?? i.id}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <select className="gc-input mt-2 w-full" value={addSubRecipeId} onChange={(e) => setAddSubRecipeId(e.target.value)}>
+                <option value="">Select sub-recipe…</option>
+                {subRecipeOptions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} (yield: {toNum(r.yield_qty, 0)} {safeUnit(r.yield_unit ?? '') || '—'})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <div className="gc-label">QTY + UNIT</div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input className="gc-input" type="number" min={0} step="0.01" value={addQty} onChange={(e) => setAddQty(e.target.value)} />
+              <select className="gc-input" value={addUnit} onChange={(e) => setAddUnit(e.target.value as any)}>
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="ml">ml</option>
+                <option value="l">l</option>
+                <option value="pcs">pcs</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div className="gc-label">NOTE</div>
+            <input className="gc-input mt-2 w-full" value={addNote} onChange={(e) => setAddNote(e.target.value)} placeholder="optional…" />
+          </div>
+
+          <div className="flex items-end">
+            <button className="gc-btn gc-btn-primary w-full" type="button" onClick={addLineInline} disabled={savingAdd}>
+              {savingAdd ? 'Saving…' : '+ Add'}
+            </button>
+          </div>
+        </div>
+
+        {/* Add Group */}
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
+          <div>
+            <div className="gc-label">ADD GROUP HEADER</div>
+            <input className="gc-input mt-2 w-full" value={groupTitle} onChange={(e) => setGroupTitle(e.target.value)} placeholder="e.g., Sauce / Filling / Topping" />
+          </div>
+          <div className="flex items-end">
+            <button className="gc-btn gc-btn-ghost w-full" type="button" onClick={addGroup} disabled={savingGroup}>
+              {savingGroup ? 'Saving…' : '+ Add Group'}
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        {lines.length === 0 ? (
+          <div className="mt-4 text-sm text-neutral-600">No lines yet.</div>
+        ) : (
+          <div className="mt-4 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+            <div className="grid grid-cols-[1.4fr_.55fr_.55fr_1fr_1.2fr] gap-0 border-b border-neutral-200 bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600">
+              <div>Item</div>
+              <div className="text-right">Qty</div>
+              <div className="text-right">Unit</div>
+              <div>Note</div>
+              <div className="text-right">Actions</div>
+            </div>
+
+            <div className="divide-y divide-neutral-200">
+              {lines.map((l) => {
+                const row = edit[l.id]
+                const saving = rowSaving[l.id] === true
+
+                // GROUP row
+                if ((row?.line_type ?? l.line_type) === 'group') {
+                  const title = row?.group_title ?? l.group_title ?? ''
+                  return (
+                    <div key={l.id} className="px-4 py-3 bg-neutral-50">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex-1 min-w-[260px]">
+                          <div className="gc-label">GROUP</div>
+                          <input
+                            className="gc-input mt-2 w-full font-semibold"
+                            value={title}
+                            onChange={(ev) =>
+                              setEdit((p) => ({
+                                ...p,
+                                [l.id]: {
+                                  ...(p[l.id] || {
+                                    line_type: 'group',
+                                    ingredient_id: '',
+                                    sub_recipe_id: '',
+                                    qty: '0',
+                                    unit: 'g',
+                                    note: '',
+                                    group_title: '',
+                                  }),
+                                  line_type: 'group',
+                                  group_title: ev.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="Group title…"
+                          />
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button className="gc-btn gc-btn-ghost" type="button" onClick={() => moveLine(l.id, -1)} disabled={reorderSaving}>
+                            ↑
+                          </button>
+                          <button className="gc-btn gc-btn-ghost" type="button" onClick={() => moveLine(l.id, 1)} disabled={reorderSaving}>
+                            ↓
+                          </button>
+                          <button className="gc-btn gc-btn-ghost" type="button" onClick={() => duplicateLine(l.id)}>
+                            Duplicate
+                          </button>
+                          <button className="gc-btn gc-btn-primary" type="button" onClick={() => saveRow(l.id)} disabled={saving}>
+                            {saving ? 'Saving…' : 'Save'}
+                          </button>
+                          <button className="gc-btn gc-btn-ghost" type="button" onClick={() => deleteLine(l.id)} disabled={saving}>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+
+                // default edit row
+                const r =
+                  row ||
+                  ({
+                    line_type: l.line_type,
+                    ingredient_id: l.ingredient_id ?? '',
+                    sub_recipe_id: l.sub_recipe_id ?? '',
+                    qty: String(l.qty ?? 0),
+                    unit: safeUnit(l.unit ?? 'g'),
+                    note: l.note ?? '',
+                    group_title: l.group_title ?? '',
+                  } as EditRow)
+
+                const setRow = (patch: Partial<EditRow>) =>
+                  setEdit((p) => ({
+                    ...p,
+                    [l.id]: { ...r, ...patch },
+                  }))
+
+                // line cost display
+                let rightInfo = ''
+                if (r.line_type === 'ingredient' && r.ingredient_id) {
+                  const ing = ingById.get(r.ingredient_id)
+                  const net = toNum(ing?.net_unit_cost, 0)
+                  const packUnit = safeUnit(ing?.pack_unit ?? 'g')
+                  const conv = convertQtyToPackUnit(toNum(r.qty, 0), r.unit, packUnit)
+                  rightInfo = fmtMoney(conv * net, currency)
+                } else if (r.line_type === 'subrecipe' && r.sub_recipe_id) {
+                  const child = recipeById.get(r.sub_recipe_id)
+                  const childRes = child ? getRecipeTotalCost(child.id, new Set<string>()) : { cost: 0, warnings: [] as string[] }
+                  const yq = child ? toNum(child.yield_qty, 0) : 0
+                  const yu = child ? safeUnit(child.yield_unit ?? '') : ''
+                  const conv = child ? convertQty(toNum(r.qty, 0), r.unit, yu) : { ok: false, value: 0 }
+                  const lc = child && yq > 0 && conv.ok ? conv.value * (childRes.cost / yq) : 0
+                  rightInfo = fmtMoney(lc, currency)
+                }
+
+                const canExpand = r.line_type === 'subrecipe' && !!r.sub_recipe_id
+
+                return (
+                  <div key={l.id} className="px-4 py-3">
+                    <div className="grid grid-cols-[1.4fr_.55fr_.55fr_1fr_1.2fr] items-center gap-3">
+                      <div className="pr-2">
+                        <div className="flex items-center gap-2">
+                          <select className="gc-input w-[140px]" value={r.line_type} onChange={(ev) => setRow({ line_type: ev.target.value as any, ingredient_id: '', sub_recipe_id: '' })}>
+                            <option value="ingredient">Ingredient</option>
+                            <option value="subrecipe">Sub-recipe</option>
+                          </select>
+
+                          {r.line_type === 'ingredient' ? (
+                            <select className="gc-input flex-1" value={r.ingredient_id} onChange={(ev) => setRow({ ingredient_id: ev.target.value })}>
+                              <option value="">Select…</option>
+                              {activeIngredients.map((i) => (
+                                <option key={i.id} value={i.id}>
+                                  {i.name ?? i.id}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <select className="gc-input flex-1" value={r.sub_recipe_id} onChange={(ev) => setRow({ sub_recipe_id: ev.target.value })}>
+                              <option value="">Select…</option>
+                              {subRecipeOptions.map((sr) => (
+                                <option key={sr.id} value={sr.id}>
+                                  {sr.name} (yield: {toNum(sr.yield_qty, 0)} {safeUnit(sr.yield_unit ?? '') || '—'})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+
+                        <div className="mt-1 text-[11px] text-neutral-500 flex items-center justify-between">
+                          <span className="truncate">{rightInfo ? 'Line cost computed' : ''}</span>
+                          <span className="font-semibold">{rightInfo}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <input className="gc-input w-full text-right" type="number" min={0} step="0.01" value={r.qty} onChange={(ev) => setRow({ qty: ev.target.value })} />
+                      </div>
+
+                      <div className="text-right">
+                        <select className="gc-input w-full text-right" value={safeUnit(r.unit)} onChange={(ev) => setRow({ unit: ev.target.value })}>
+                          <option value="g">g</option>
+                          <option value="kg">kg</option>
+                          <option value="ml">ml</option>
+                          <option value="l">l</option>
+                          <option value="pcs">pcs</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <input className="gc-input w-full" value={r.note} onChange={(ev) => setRow({ note: ev.target.value })} placeholder="e.g., chopped / room temp / to taste…" />
+                      </div>
+
+                      <div className="flex justify-end gap-2">
+                        {canExpand && (
+                          <button className="gc-btn gc-btn-ghost" type="button" onClick={() => toggleExpand(l.id)}>
+                            {expanded[l.id] ? 'Hide' : 'Expand'}
+                          </button>
+                        )}
+                        <button className="gc-btn gc-btn-ghost" type="button" onClick={() => moveLine(l.id, -1)} disabled={reorderSaving}>
+                          ↑
+                        </button>
+                        <button className="gc-btn gc-btn-ghost" type="button" onClick={() => moveLine(l.id, 1)} disabled={reorderSaving}>
+                          ↓
+                        </button>
+                        <button className="gc-btn gc-btn-ghost" type="button" onClick={() => duplicateLine(l.id)}>
+                          Duplicate
+                        </button>
+                        <button className="gc-btn gc-btn-primary" type="button" onClick={() => saveRow(l.id)} disabled={saving}>
+                          {saving ? 'Saving…' : 'Save'}
+                        </button>
+                        <button className="gc-btn gc-btn-ghost" type="button" onClick={() => deleteLine(l.id)} disabled={saving}>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    {canExpand && expanded[l.id] && r.sub_recipe_id ? renderBreakdown(r.sub_recipe_id, 0) : null}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <Toast open={toastOpen} message={toastMsg} onClose={() => setToastOpen(false)} />
