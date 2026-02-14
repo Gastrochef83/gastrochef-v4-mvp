@@ -1,5 +1,5 @@
-import { NavLink, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { NavLink, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 import Dashboard from '../pages/Dashboard'
@@ -7,6 +7,7 @@ import Ingredients from '../pages/Ingredients'
 import Recipes from '../pages/Recipes'
 import Settings from '../pages/Settings'
 import RecipeEditor from '../pages/RecipeEditor'
+import RecipeCookMode from '../pages/RecipeCookMode'
 
 function NavItem({ to, label }: { to: string; label: string }) {
   return (
@@ -24,8 +25,8 @@ function NavItem({ to, label }: { to: string; label: string }) {
 }
 
 export default function AppLayout() {
-  const nav = useNavigate()
-  const [userEmail, setUserEmail] = useState<string>('')
+  const location = useLocation()
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -33,14 +34,14 @@ export default function AppLayout() {
     const boot = async () => {
       const { data } = await supabase.auth.getUser()
       if (!mounted) return
-      setUserEmail(data.user?.email ?? '')
+      setUserEmail(data.user?.email ?? null)
     }
+
     boot()
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async () => {
-      const { data } = await supabase.auth.getUser()
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return
-      setUserEmail(data.user?.email ?? '')
+      setUserEmail(session?.user?.email ?? null)
     })
 
     return () => {
@@ -49,57 +50,65 @@ export default function AppLayout() {
     }
   }, [])
 
-  const signOut = async () => {
+  const onSignOut = async () => {
     await supabase.auth.signOut()
-    nav('/login', { replace: true })
   }
 
   return (
     <div className="min-h-screen">
       <div className="container-app">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
           {/* Sidebar */}
-          <div className="gc-card p-5">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-2xl bg-neutral-900" />
+          <aside className="gc-card p-4">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <div className="font-extrabold leading-tight">GastroChef</div>
-                <div className="text-xs text-neutral-500">V4 MVP</div>
+                <div className="text-xs font-semibold text-neutral-500">GastroChef</div>
+                <div className="text-lg font-extrabold text-neutral-900">v4 MVP</div>
               </div>
-            </div>
-
-            <div className="mt-6">
-              <div className="gc-label">NAVIGATION</div>
-              <div className="mt-3 space-y-2">
-                <NavItem to="/dashboard" label="Dashboard" />
-                <NavItem to="/ingredients" label="Ingredients" />
-                <NavItem to="/recipes" label="Recipes" />
-                <NavItem to="/settings" label="Settings" />
-              </div>
-            </div>
-
-            <div className="mt-6 border-t border-neutral-200 pt-4">
-              <div className="text-xs text-neutral-500">Signed in</div>
-              <div className="mt-1 text-sm font-semibold">{userEmail || '—'}</div>
-
-              <button className="gc-btn gc-btn-ghost mt-3 w-full" type="button" onClick={signOut}>
+              <button className="gc-btn gc-btn-ghost" onClick={onSignOut}>
                 Sign out
               </button>
             </div>
-          </div>
+
+            <div className="mt-3 text-xs text-neutral-500 truncate">
+              {userEmail ? userEmail : '—'}
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <NavItem to="/dashboard" label="Dashboard" />
+              <NavItem to="/ingredients" label="Ingredients" />
+              <NavItem to="/recipes" label="Recipes" />
+              <NavItem to="/settings" label="Settings" />
+            </div>
+
+            {/* Quick links */}
+            <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
+              <div className="text-xs font-semibold text-neutral-600">Quick</div>
+              <div className="mt-2 text-xs text-neutral-500">
+                Current: <span className="font-mono">{location.pathname}</span>
+              </div>
+            </div>
+          </aside>
 
           {/* Main */}
-          <div className="space-y-6">
+          <main className="space-y-6">
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/ingredients" element={<Ingredients />} />
               <Route path="/recipes" element={<Recipes />} />
-              <Route path="/recipe-editor" element={<RecipeEditor />} />
               <Route path="/settings" element={<Settings />} />
+
+              {/* ✅ Editor */}
+              <Route path="/recipe" element={<RecipeEditor />} />
+
+              {/* ✅ Cook Mode */}
+              <Route path="/cook" element={<RecipeCookMode />} />
+
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
-          </div>
+          </main>
         </div>
       </div>
     </div>
