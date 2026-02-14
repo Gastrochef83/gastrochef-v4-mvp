@@ -74,37 +74,27 @@ function fmtMoney(n: number, currency: string) {
   }
 }
 
-// basic unit conversion within same family (g/kg) (ml/l) (pcs)
+// g<->kg , ml<->l , pcs only
 function convertQty(qty: number, fromUnit: string, toUnit: string) {
   const f = safeUnit(fromUnit)
   const t = safeUnit(toUnit)
   if (f === t) return { ok: true, value: qty }
-
-  // weight
   if (f === 'g' && t === 'kg') return { ok: true, value: qty / 1000 }
   if (f === 'kg' && t === 'g') return { ok: true, value: qty * 1000 }
-
-  // volume
   if (f === 'ml' && t === 'l') return { ok: true, value: qty / 1000 }
   if (f === 'l' && t === 'ml') return { ok: true, value: qty * 1000 }
-
-  // pcs only to pcs
-  if (f === 'pcs' && t === 'pcs') return { ok: true, value: qty }
-
   return { ok: false, value: 0 }
 }
 
-// ingredient line: convert line qty to ingredient pack unit (keeps your old behavior)
+// convert ingredient line qty to ingredient pack unit (keeps old behavior)
 function convertQtyToPackUnit(qty: number, lineUnit: string, packUnit: string) {
   const u = safeUnit(lineUnit)
   const p = safeUnit(packUnit)
-
   let conv = qty
   if (u === 'g' && p === 'kg') conv = qty / 1000
   else if (u === 'kg' && p === 'g') conv = qty * 1000
   else if (u === 'ml' && p === 'l') conv = qty / 1000
   else if (u === 'l' && p === 'ml') conv = qty * 1000
-
   return conv
 }
 
@@ -157,6 +147,12 @@ export default function RecipeEditor() {
   const [sellingPrice, setSellingPrice] = useState('')
   const [targetFC, setTargetFC] = useState('30')
 
+  // Sub-recipe settings
+  const [isSubRecipe, setIsSubRecipe] = useState(false)
+  const [yieldQty, setYieldQty] = useState('')
+  const [yieldUnit, setYieldUnit] = useState<'g' | 'kg' | 'ml' | 'l' | 'pcs'>('g')
+  const [yieldSmartLoading, setYieldSmartLoading] = useState(false)
+
   // Toast
   const [toastMsg, setToastMsg] = useState('')
   const [toastOpen, setToastOpen] = useState(false)
@@ -171,7 +167,7 @@ export default function RecipeEditor() {
   const [addIngredientId, setAddIngredientId] = useState('')
   const [addSubRecipeId, setAddSubRecipeId] = useState('')
   const [addQty, setAddQty] = useState('1')
-  const [addUnit, setAddUnit] = useState('g')
+  const [addUnit, setAddUnit] = useState<'g' | 'kg' | 'ml' | 'l' | 'pcs'>('g')
   const [addNote, setAddNote] = useState('')
   const [savingAdd, setSavingAdd] = useState(false)
 
@@ -188,7 +184,7 @@ export default function RecipeEditor() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const toggleExpand = (lineId: string) => setExpanded((p) => ({ ...p, [lineId]: !p[lineId] }))
 
-  // For recursive cost/breakdown: cache lines for recipes that are referenced
+  // Recursive cache of recipe_lines for referenced subrecipes
   const [recipeLinesCache, setRecipeLinesCache] = useState<Record<string, Line[]>>({})
 
   const loadAll = async (recipeId: string) => {
@@ -215,10 +211,11 @@ export default function RecipeEditor() {
       .order('name', { ascending: true })
     if (iErr) throw iErr
 
-    // recipes list (for subrecipes dropdown)
     const { data: rs, error: rsErr } = await supabase
       .from('recipes')
-      .select('id,kitchen_id,name,category,portions,yield_qty,yield_unit,is_subrecipe,is_archived,photo_url,description,method,method_steps,calories,protein_g,carbs_g,fat_g,selling_price,currency,target_food_cost_pct')
+      .select(
+        'id,kitchen_id,name,category,portions,yield_qty,yield_unit,is_subrecipe,is_archived,photo_url,description,method,method_steps,calories,protein_g,carbs_g,fat_g,selling_price,currency,target_food_cost_pct'
+      )
       .eq('kitchen_id', (r as any).kitchen_id)
       .order('name', { ascending: true })
     if (rsErr) throw rsErr
@@ -237,6 +234,7 @@ export default function RecipeEditor() {
     setCategory(rr.category ?? '')
     setPortions(String(rr.portions ?? 1))
     setDescription(rr.description ?? '')
+
     setSteps(normalizeSteps(rr.method_steps))
     setMethodLegacy(rr.method ?? '')
 
@@ -249,7 +247,12 @@ export default function RecipeEditor() {
     setSellingPrice(rr.selling_price == null ? '' : String(rr.selling_price))
     setTargetFC(rr.target_food_cost_pct == null ? '30' : String(rr.target_food_cost_pct))
 
-    // prep edit map
+    // sub-recipe settings
+    setIsSubRecipe(rr.is_subrecipe === true)
+    setYieldQty(rr.yield_qty == null ? '' : String(rr.yield_qty))
+    setYieldUnit((safeUnit(rr.yield_unit ?? 'g') as any) || 'g')
+
+    // edit map
     const m: Record<string, EditRow> = {}
     for (const x of ll) {
       m[x.id] = {
@@ -315,8 +318,6 @@ export default function RecipeEditor() {
   // -------------------------
   // Recursive cost (multi-level)
   // -------------------------
-
-  // fetch missing recipe_lines for referenced subrecipes (and their children) on demand
   const ensureRecipeLinesLoaded = async (rootRecipeId: string) => {
     const seen = new Set<string>()
     const queue: string[] = [rootRecipeId]
@@ -338,7 +339,6 @@ export default function RecipeEditor() {
 
     if (needFetch.length === 0) return
 
-    // fetch in chunks (supabase in() supports arrays)
     const fetched: Record<string, Line[]> = {}
     const chunk = (arr: string[], size: number) => {
       const out: string[][] = []
@@ -368,7 +368,6 @@ export default function RecipeEditor() {
 
   useEffect(() => {
     if (!recipe) return
-    // whenever lines change, try to ensure cache contains children for cost/breakdown
     ensureRecipeLinesLoaded(recipe.id).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipe?.id, lines])
@@ -383,7 +382,6 @@ export default function RecipeEditor() {
 
     const rr = recipeById.get(recipeId)
     const rLines = recipeLinesCache[recipeId] ?? []
-
     let sum = 0
 
     for (const l of rLines) {
@@ -404,28 +402,26 @@ export default function RecipeEditor() {
         const childId = l.sub_recipe_id
         const child = recipeById.get(childId)
         const childLines = recipeLinesCache[childId]
-        // if child lines not loaded yet, treat as 0 for now
         if (!child || !childLines) continue
 
         const childRes = getRecipeTotalCost(childId, visited)
         for (const w of childRes.warnings) warnings.push(w)
 
-        const yieldQty = toNum(child.yield_qty, 0)
-        const yieldUnit = safeUnit(child.yield_unit ?? '')
-        if (yieldQty <= 0 || !yieldUnit) {
+        const yq = toNum(child.yield_qty, 0)
+        const yu = safeUnit(child.yield_unit ?? '')
+        if (yq <= 0 || !yu) {
           warnings.push(`Missing yield for subrecipe: ${child.name}`)
           continue
         }
 
-        // qty in parent is "amount of yield"
         const qtyParent = toNum(l.qty, 0)
-        const conv = convertQty(qtyParent, l.unit, yieldUnit)
+        const conv = convertQty(qtyParent, l.unit, yu)
         if (!conv.ok) {
-          warnings.push(`Unit mismatch for subrecipe "${child.name}" (${safeUnit(l.unit)} -> ${yieldUnit})`)
+          warnings.push(`Unit mismatch for subrecipe "${child.name}" (${safeUnit(l.unit)} -> ${yu})`)
           continue
         }
 
-        const costPerYieldUnit = childRes.cost / yieldQty
+        const costPerYieldUnit = childRes.cost / yq
         sum += conv.value * costPerYieldUnit
         continue
       }
@@ -438,9 +434,7 @@ export default function RecipeEditor() {
 
   const totalCostRes = useMemo(() => {
     if (!recipe) return { cost: 0, warnings: [] as string[] }
-    // make sure cache has current recipe lines (already set) and (best effort) children
-    const res = getRecipeTotalCost(recipe.id, new Set<string>())
-    return { cost: res.cost, warnings: res.warnings }
+    return getRecipeTotalCost(recipe.id, new Set<string>())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipe?.id, recipeLinesCache, ingById, recipeById])
 
@@ -462,13 +456,13 @@ export default function RecipeEditor() {
   }
 
   // -------------------------
-  // Save recipe meta
+  // Save recipe meta (includes sub-recipe + yield)
   // -------------------------
   const saveMeta = async () => {
     if (!id) return
     setSavingMeta(true)
     try {
-      const payload = {
+      const payload: any = {
         name: name.trim() || 'Untitled',
         category: category.trim() || null,
         portions: Math.max(1, toNum(portions, 1)),
@@ -485,6 +479,11 @@ export default function RecipeEditor() {
         currency: (currency || 'USD').toUpperCase(),
         selling_price: sellingPrice.trim() === '' ? null : Math.max(0, toNum(sellingPrice, 0)),
         target_food_cost_pct: Math.min(99, Math.max(1, toNum(targetFC, 30))),
+
+        // sub-recipe settings
+        is_subrecipe: isSubRecipe,
+        yield_qty: yieldQty.trim() === '' ? null : Math.max(0, toNum(yieldQty, 0)),
+        yield_unit: isSubRecipe ? safeUnit(yieldUnit) : null,
       }
 
       const { error } = await supabase.from('recipes').update(payload).eq('id', id)
@@ -496,6 +495,92 @@ export default function RecipeEditor() {
       showToast(e?.message ?? 'Save failed')
     } finally {
       setSavingMeta(false)
+    }
+  }
+
+  // -------------------------
+  // Yield Smart
+  // -------------------------
+  const yieldSmart = async () => {
+    if (!recipe) return
+    setYieldSmartLoading(true)
+    try {
+      // we calculate a suggested yield in one of: g | ml | pcs
+      // rule:
+      // - if there are weight lines => suggest total weight (g)
+      // - else if volume lines => suggest total volume (ml)
+      // - else if pcs lines => suggest total pcs
+      // - includes sub-recipes: converts qty to subrecipe yield_unit then adds
+      // - ignores groups
+      await ensureRecipeLinesLoaded(recipe.id)
+
+      let weightG = 0
+      let volumeML = 0
+      let pieces = 0
+
+      const addWeight = (qty: number, unit: string) => {
+        const u = safeUnit(unit)
+        if (u === 'g') weightG += qty
+        else if (u === 'kg') weightG += qty * 1000
+      }
+      const addVolume = (qty: number, unit: string) => {
+        const u = safeUnit(unit)
+        if (u === 'ml') volumeML += qty
+        else if (u === 'l') volumeML += qty * 1000
+      }
+      const addPcs = (qty: number, unit: string) => {
+        const u = safeUnit(unit)
+        if (u === 'pcs') pieces += qty
+      }
+
+      const rLines = recipeLinesCache[recipe.id] ?? []
+
+      for (const l of rLines) {
+        if (l.line_type === 'group') continue
+        const q = Math.max(0, toNum(l.qty, 0))
+        const u = safeUnit(l.unit)
+
+        if (l.line_type === 'ingredient') {
+          addWeight(q, u)
+          addVolume(q, u)
+          addPcs(q, u)
+          continue
+        }
+
+        if (l.line_type === 'subrecipe' && l.sub_recipe_id) {
+          const child = recipeById.get(l.sub_recipe_id)
+          if (!child) continue
+          const yu = safeUnit(child.yield_unit ?? '')
+          // qty already means "amount of yield", so we add it to the same family as yu
+          if (yu === 'g' || yu === 'kg') addWeight(q, u)
+          else if (yu === 'ml' || yu === 'l') addVolume(q, u)
+          else if (yu === 'pcs') addPcs(q, u)
+        }
+      }
+
+      // choose best family
+      if (weightG > 0) {
+        setIsSubRecipe(true)
+        setYieldUnit('g')
+        setYieldQty(String(Math.round(weightG)))
+        showToast(`Yield Smart ✅ Suggested yield: ${Math.round(weightG)} g`)
+      } else if (volumeML > 0) {
+        setIsSubRecipe(true)
+        setYieldUnit('ml')
+        setYieldQty(String(Math.round(volumeML)))
+        showToast(`Yield Smart ✅ Suggested yield: ${Math.round(volumeML)} ml`)
+      } else if (pieces > 0) {
+        setIsSubRecipe(true)
+        setYieldUnit('pcs')
+        setYieldQty(String(Math.round(pieces * 10) / 10))
+        showToast(`Yield Smart ✅ Suggested yield: ${Math.round(pieces * 10) / 10} pcs`)
+      } else {
+        showToast('Yield Smart: no measurable lines found (g/ml/pcs).')
+      }
+    } catch (e: any) {
+      showToast(e?.message ?? 'Yield Smart failed')
+    } finally {
+      setYieldSmartLoading(false)
     }
   }
 
@@ -529,7 +614,6 @@ export default function RecipeEditor() {
     try {
       const ext = extFromType(file.type)
       const key = `recipes/${id}/${Date.now()}.${ext}`
-
       const { error: upErr } = await supabase.storage.from('recipe-photos').upload(key, file, {
         upsert: true,
         contentType: file.type,
@@ -557,14 +641,13 @@ export default function RecipeEditor() {
   // -------------------------
   const addLineInline = async () => {
     if (!id) return
-
     const qty = Math.max(0, toNum(addQty, 0))
-    if (addType !== 'group' && qty <= 0) return showToast('Qty must be > 0')
+    if (qty <= 0) return showToast('Qty must be > 0')
 
     setSavingAdd(true)
     try {
       const maxSort = lines.length ? Math.max(...lines.map((x) => toNum(x.sort_order, 0))) : 0
-      const base = {
+      const base: any = {
         recipe_id: id,
         sort_order: maxSort + 10,
         note: addNote.trim() || null,
@@ -633,7 +716,6 @@ export default function RecipeEditor() {
       }
       const { error } = await supabase.from('recipe_lines').insert(payload as any)
       if (error) throw error
-
       setGroupTitle('')
       showToast('Group added ✅')
       await loadAll(id)
@@ -744,7 +826,6 @@ export default function RecipeEditor() {
         note: src.note,
         group_title: src.line_type === 'group' ? (src.group_title ?? 'Group') : null,
       }
-
       const { error } = await supabase.from('recipe_lines').insert(payload)
       if (error) throw error
       showToast('Duplicated ✅')
@@ -758,9 +839,8 @@ export default function RecipeEditor() {
     if (!id) return
     setReorderSaving(true)
     try {
-      const updates = ordered.map((x, idx) => ({ id: x.id, sort_order: (idx + 1) * 10 }))
-      const tasks = updates.map((u) =>
-        supabase.from('recipe_lines').update({ sort_order: u.sort_order }).eq('id', u.id).eq('recipe_id', id)
+      const tasks = ordered.map((x, idx) =>
+        supabase.from('recipe_lines').update({ sort_order: (idx + 1) * 10 }).eq('id', x.id).eq('recipe_id', id)
       )
       const results = await Promise.all(tasks)
       const bad = results.find((r) => r.error)
@@ -786,7 +866,7 @@ export default function RecipeEditor() {
   }
 
   // -------------------------
-  // Render breakdown (recursive)
+  // Breakdown render (depth up to 2)
   // -------------------------
   const renderBreakdown = (subRecipeId: string, depth: number) => {
     const r = recipeById.get(subRecipeId)
@@ -794,9 +874,9 @@ export default function RecipeEditor() {
     if (!r) return null
 
     const res = getRecipeTotalCost(subRecipeId, new Set<string>())
-    const yieldQty = toNum(r.yield_qty, 0)
-    const yieldUnit = safeUnit(r.yield_unit ?? '')
-    const perUnit = yieldQty > 0 ? res.cost / yieldQty : 0
+    const yq = toNum(r.yield_qty, 0)
+    const yu = safeUnit(r.yield_unit ?? '')
+    const perUnit = yq > 0 ? res.cost / yq : 0
 
     return (
       <div className="mt-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
@@ -805,7 +885,7 @@ export default function RecipeEditor() {
             <div className="text-xs font-semibold text-neutral-600">SUB-RECIPE BREAKDOWN</div>
             <div className="text-sm font-extrabold">{r.name}</div>
             <div className="text-xs text-neutral-500">
-              Yield: <span className="font-semibold">{yieldQty || '—'}</span> {yieldUnit || '—'} · Cost per yield unit:{' '}
+              Yield: <span className="font-semibold">{yq || '—'}</span> {yu || '—'} · Cost per yield unit:{' '}
               <span className="font-semibold">{fmtMoney(perUnit, currency)}</span>
             </div>
           </div>
@@ -828,8 +908,8 @@ export default function RecipeEditor() {
                 const ing = l.ingredient_id ? ingById.get(l.ingredient_id) : undefined
                 const label = ing?.name ?? 'Ingredient'
                 return (
-                  <div key={l.id} className="flex items-center justify-between gap-2 text-sm">
-                    <div className="text-neutral-700" style={{ paddingLeft: depth * 12 }}>
+                  <div key={l.id} className="flex items-center justify-between gap-2 text-sm" style={{ paddingLeft: depth * 12 }}>
+                    <div className="text-neutral-700">
                       • {label} — {l.qty} {safeUnit(l.unit)}
                     </div>
                     <div className="text-neutral-500">{l.note ? l.note : ''}</div>
@@ -858,7 +938,7 @@ export default function RecipeEditor() {
   }
 
   // -------------------------
-  // UI guards
+  // Guards
   // -------------------------
   if (loading) return <div className="gc-card p-6">Loading editor…</div>
   if (err) {
@@ -901,8 +981,8 @@ export default function RecipeEditor() {
               )}
             </div>
 
-            <div className="min-w-[min(560px,92vw)]">
-              <div className="gc-label">RECIPE EDITOR (SUB-RECIPES TREE + MANUAL NUTRITION)</div>
+            <div className="min-w-[min(640px,92vw)]">
+              <div className="gc-label">RECIPE EDITOR (SUB-RECIPES TREE + YIELD SMART)</div>
 
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <div>
@@ -944,6 +1024,56 @@ export default function RecipeEditor() {
                     ← Back
                   </NavLink>
                 </div>
+              </div>
+
+              {/* Sub-Recipe Settings */}
+              <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="gc-label">SUB-RECIPE SETTINGS</div>
+                    <div className="mt-1 text-xs text-neutral-500">Enable this to use the recipe inside other recipes by quantity of yield.</div>
+                  </div>
+
+                  <button className="gc-btn gc-btn-ghost" type="button" onClick={yieldSmart} disabled={yieldSmartLoading}>
+                    {yieldSmartLoading ? 'Calculating…' : 'Yield Smart'}
+                  </button>
+                </div>
+
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input type="checkbox" checked={isSubRecipe} onChange={(e) => setIsSubRecipe(e.target.checked)} />
+                    This is a Sub-Recipe
+                  </label>
+
+                  <div>
+                    <div className="gc-label">YIELD QTY</div>
+                    <input
+                      className="gc-input mt-2 w-full"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={yieldQty}
+                      onChange={(e) => setYieldQty(e.target.value)}
+                      disabled={!isSubRecipe}
+                      placeholder="e.g., 500"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="gc-label">YIELD UNIT</div>
+                    <select className="gc-input mt-2 w-full" value={yieldUnit} onChange={(e) => setYieldUnit(e.target.value as any)} disabled={!isSubRecipe}>
+                      <option value="g">g</option>
+                      <option value="kg">kg</option>
+                      <option value="ml">ml</option>
+                      <option value="l">l</option>
+                      <option value="pcs">pcs</option>
+                    </select>
+                  </div>
+                </div>
+
+                {isSubRecipe && (yieldQty.trim() === '' || !yieldUnit) ? (
+                  <div className="mt-2 text-xs text-amber-700">Tip: set Yield Qty + Unit then press Save.</div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -1108,7 +1238,7 @@ export default function RecipeEditor() {
         )}
       </div>
 
-      {/* INGREDIENTS + SUBRECIPES TREE */}
+      {/* LINES */}
       <div className="gc-card p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1164,7 +1294,7 @@ export default function RecipeEditor() {
             <div className="gc-label">QTY + UNIT</div>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <input className="gc-input" type="number" min={0} step="0.01" value={addQty} onChange={(e) => setAddQty(e.target.value)} />
-              <select className="gc-input" value={safeUnit(addUnit)} onChange={(e) => setAddUnit(e.target.value)}>
+              <select className="gc-input" value={addUnit} onChange={(e) => setAddUnit(e.target.value as any)}>
                 <option value="g">g</option>
                 <option value="kg">kg</option>
                 <option value="ml">ml</option>
@@ -1214,12 +1344,12 @@ export default function RecipeEditor() {
 
             <div className="divide-y divide-neutral-200">
               {lines.map((l) => {
-                const e = edit[l.id]
+                const row = edit[l.id]
                 const saving = rowSaving[l.id] === true
 
-                // GROUP ROW
-                if ((e?.line_type ?? l.line_type) === 'group') {
-                  const title = e?.group_title ?? l.group_title ?? ''
+                // GROUP row
+                if ((row?.line_type ?? l.line_type) === 'group') {
+                  const title = row?.group_title ?? l.group_title ?? ''
                   return (
                     <div key={l.id} className="px-4 py-3 bg-neutral-50">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1272,61 +1402,57 @@ export default function RecipeEditor() {
                   )
                 }
 
-                // unified editor state
-                const row = e || {
-                  line_type: l.line_type,
-                  ingredient_id: l.ingredient_id ?? '',
-                  sub_recipe_id: l.sub_recipe_id ?? '',
-                  qty: String(l.qty ?? 0),
-                  unit: safeUnit(l.unit ?? 'g'),
-                  note: l.note ?? '',
-                  group_title: l.group_title ?? '',
-                }
+                // default edit row
+                const r =
+                  row ||
+                  ({
+                    line_type: l.line_type,
+                    ingredient_id: l.ingredient_id ?? '',
+                    sub_recipe_id: l.sub_recipe_id ?? '',
+                    qty: String(l.qty ?? 0),
+                    unit: safeUnit(l.unit ?? 'g'),
+                    note: l.note ?? '',
+                    group_title: l.group_title ?? '',
+                  } as EditRow)
 
                 const setRow = (patch: Partial<EditRow>) =>
                   setEdit((p) => ({
                     ...p,
-                    [l.id]: { ...row, ...patch },
+                    [l.id]: { ...r, ...patch },
                   }))
 
-                // cost display
+                // line cost display
                 let rightInfo = ''
-                if (row.line_type === 'ingredient' && row.ingredient_id) {
-                  const ing = ingById.get(row.ingredient_id)
+                if (r.line_type === 'ingredient' && r.ingredient_id) {
+                  const ing = ingById.get(r.ingredient_id)
                   const net = toNum(ing?.net_unit_cost, 0)
                   const packUnit = safeUnit(ing?.pack_unit ?? 'g')
-                  const conv = convertQtyToPackUnit(toNum(row.qty, 0), row.unit, packUnit)
-                  const lc = conv * net
-                  rightInfo = fmtMoney(lc, currency)
-                } else if (row.line_type === 'subrecipe' && row.sub_recipe_id) {
-                  const child = recipeById.get(row.sub_recipe_id)
+                  const conv = convertQtyToPackUnit(toNum(r.qty, 0), r.unit, packUnit)
+                  rightInfo = fmtMoney(conv * net, currency)
+                } else if (r.line_type === 'subrecipe' && r.sub_recipe_id) {
+                  const child = recipeById.get(r.sub_recipe_id)
                   const childRes = child ? getRecipeTotalCost(child.id, new Set<string>()) : { cost: 0, warnings: [] as string[] }
-                  const yieldQty = child ? toNum(child.yield_qty, 0) : 0
-                  const yieldUnit = child ? safeUnit(child.yield_unit ?? '') : ''
-                  const conv = child ? convertQty(toNum(row.qty, 0), row.unit, yieldUnit) : { ok: false, value: 0 }
-                  const lc = child && yieldQty > 0 && conv.ok ? conv.value * (childRes.cost / yieldQty) : 0
+                  const yq = child ? toNum(child.yield_qty, 0) : 0
+                  const yu = child ? safeUnit(child.yield_unit ?? '') : ''
+                  const conv = child ? convertQty(toNum(r.qty, 0), r.unit, yu) : { ok: false, value: 0 }
+                  const lc = child && yq > 0 && conv.ok ? conv.value * (childRes.cost / yq) : 0
                   rightInfo = fmtMoney(lc, currency)
                 }
 
-                const itemLabel =
-                  row.line_type === 'ingredient'
-                    ? ingById.get(row.ingredient_id)?.name ?? 'Ingredient'
-                    : recipeById.get(row.sub_recipe_id)?.name ?? 'Sub-recipe'
-
-                const canExpand = row.line_type === 'subrecipe' && !!row.sub_recipe_id
+                const canExpand = r.line_type === 'subrecipe' && !!r.sub_recipe_id
 
                 return (
                   <div key={l.id} className="px-4 py-3">
                     <div className="grid grid-cols-[1.4fr_.55fr_.55fr_1fr_1.2fr] items-center gap-3">
                       <div className="pr-2">
                         <div className="flex items-center gap-2">
-                          <select className="gc-input w-[140px]" value={row.line_type} onChange={(ev) => setRow({ line_type: ev.target.value as any, ingredient_id: '', sub_recipe_id: '' })}>
+                          <select className="gc-input w-[140px]" value={r.line_type} onChange={(ev) => setRow({ line_type: ev.target.value as any, ingredient_id: '', sub_recipe_id: '' })}>
                             <option value="ingredient">Ingredient</option>
                             <option value="subrecipe">Sub-recipe</option>
                           </select>
 
-                          {row.line_type === 'ingredient' ? (
-                            <select className="gc-input flex-1" value={row.ingredient_id} onChange={(ev) => setRow({ ingredient_id: ev.target.value })}>
+                          {r.line_type === 'ingredient' ? (
+                            <select className="gc-input flex-1" value={r.ingredient_id} onChange={(ev) => setRow({ ingredient_id: ev.target.value })}>
                               <option value="">Select…</option>
                               {activeIngredients.map((i) => (
                                 <option key={i.id} value={i.id}>
@@ -1335,11 +1461,11 @@ export default function RecipeEditor() {
                               ))}
                             </select>
                           ) : (
-                            <select className="gc-input flex-1" value={row.sub_recipe_id} onChange={(ev) => setRow({ sub_recipe_id: ev.target.value })}>
+                            <select className="gc-input flex-1" value={r.sub_recipe_id} onChange={(ev) => setRow({ sub_recipe_id: ev.target.value })}>
                               <option value="">Select…</option>
-                              {subRecipeOptions.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.name} (yield: {toNum(r.yield_qty, 0)} {safeUnit(r.yield_unit ?? '') || '—'})
+                              {subRecipeOptions.map((sr) => (
+                                <option key={sr.id} value={sr.id}>
+                                  {sr.name} (yield: {toNum(sr.yield_qty, 0)} {safeUnit(sr.yield_unit ?? '') || '—'})
                                 </option>
                               ))}
                             </select>
@@ -1347,17 +1473,17 @@ export default function RecipeEditor() {
                         </div>
 
                         <div className="mt-1 text-[11px] text-neutral-500 flex items-center justify-between">
-                          <span className="truncate">{itemLabel}</span>
+                          <span className="truncate">{rightInfo ? 'Line cost computed' : ''}</span>
                           <span className="font-semibold">{rightInfo}</span>
                         </div>
                       </div>
 
                       <div className="text-right">
-                        <input className="gc-input w-full text-right" type="number" min={0} step="0.01" value={row.qty} onChange={(ev) => setRow({ qty: ev.target.value })} />
+                        <input className="gc-input w-full text-right" type="number" min={0} step="0.01" value={r.qty} onChange={(ev) => setRow({ qty: ev.target.value })} />
                       </div>
 
                       <div className="text-right">
-                        <select className="gc-input w-full text-right" value={safeUnit(row.unit)} onChange={(ev) => setRow({ unit: ev.target.value })}>
+                        <select className="gc-input w-full text-right" value={safeUnit(r.unit)} onChange={(ev) => setRow({ unit: ev.target.value })}>
                           <option value="g">g</option>
                           <option value="kg">kg</option>
                           <option value="ml">ml</option>
@@ -1367,7 +1493,7 @@ export default function RecipeEditor() {
                       </div>
 
                       <div>
-                        <input className="gc-input w-full" value={row.note} onChange={(ev) => setRow({ note: ev.target.value })} placeholder="e.g., chopped / room temp / to taste…" />
+                        <input className="gc-input w-full" value={r.note} onChange={(ev) => setRow({ note: ev.target.value })} placeholder="e.g., chopped / room temp / to taste…" />
                       </div>
 
                       <div className="flex justify-end gap-2">
@@ -1394,7 +1520,7 @@ export default function RecipeEditor() {
                       </div>
                     </div>
 
-                    {canExpand && expanded[l.id] && row.sub_recipe_id ? renderBreakdown(row.sub_recipe_id, 0) : null}
+                    {canExpand && expanded[l.id] && r.sub_recipe_id ? renderBreakdown(r.sub_recipe_id, 0) : null}
                   </div>
                 )
               })}
