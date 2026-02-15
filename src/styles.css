@@ -1,18 +1,149 @@
-/* Mode toggle */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================
+   GastroChef Styles — Known Good (Stable)
+   Fix: restores Tailwind + GC components
+   ========================================= */
+
+:root {
+  --gc-bg: #fafafa;
+  --gc-card: #ffffff;
+  --gc-text: #0b1220;
+  --gc-muted: #667085;
+  --gc-border: rgba(15, 23, 42, 0.10);
+
+  --gc-primary: #0b1220;
+
+  --gc-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  --gc-shadow-soft: 0 10px 25px rgba(15, 23, 42, 0.06);
+
+  --gc-radius: 24px;
+  --gc-btn-radius: 16px;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(107, 143, 58, 0.10), rgba(255, 255, 255, 0)),
+    radial-gradient(900px 450px at 90% 0%, rgba(201, 162, 39, 0.10), rgba(255, 255, 255, 0)),
+    var(--gc-bg);
+  color: var(--gc-text);
+}
+
+/* Make links not look like default browser links */
+a { color: inherit; text-decoration: none; }
+
+/* Layout helper (used by AppLayout) */
+.container-app {
+  @apply mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8;
+}
+
+/* Cards */
+.gc-card {
+  background: var(--gc-card);
+  border: 1px solid var(--gc-border);
+  border-radius: var(--gc-radius);
+  box-shadow: var(--gc-shadow-soft);
+}
+
+/* Labels */
+.gc-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 900;
+  color: var(--gc-muted);
+}
+
+/* Inputs */
+.gc-input {
+  border: 1px solid var(--gc-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: #fff;
+  outline: none;
+}
+.gc-input:focus {
+  border-color: rgba(15, 23, 42, 0.28);
+  box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.08);
+}
+
+/* Textarea */
+.gc-textarea {
+  border: 1px solid var(--gc-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: #fff;
+  outline: none;
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+}
+.gc-textarea:focus {
+  border-color: rgba(15, 23, 42, 0.28);
+  box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.08);
+}
+
+/* Buttons */
+.gc-btn {
+  border-radius: var(--gc-btn-radius);
+  padding: 10px 14px;
+  font-weight: 900;
+  font-size: 14px;
+  border: 1px solid var(--gc-border);
+  background: #fff;
+  transition: transform 0.05s ease, box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+.gc-btn:hover {
+  box-shadow: var(--gc-shadow);
+  border-color: rgba(15, 23, 42, 0.18);
+}
+.gc-btn:active { transform: translateY(1px); }
+.gc-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.gc-btn-primary {
+  background: var(--gc-primary);
+  border-color: var(--gc-primary);
+  color: white;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.22);
+}
+.gc-btn-ghost { background: #fff; color: var(--gc-text); }
+
+/* Chips */
+.gc-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(11, 18, 32, 0.92);
+  font-weight: 950;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(10px);
+}
+.gc-chip-dark {
+  background: rgba(11, 18, 32, 0.85);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Mode toggle (ModePill) */
 .gc-mode-pill {
   border: 1px solid rgba(15, 23, 42, 0.10);
   border-radius: 18px;
   padding: 10px 12px;
   background: linear-gradient(180deg, rgba(250, 250, 250, 1), rgba(255, 255, 255, 1));
 }
-
 .gc-mode-switch {
   margin-top: 10px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-
 .gc-mode-btn {
   height: 36px;
   border-radius: 999px;
@@ -21,9 +152,11 @@
   font-weight: 900;
   font-size: 13px;
 }
-
 .gc-mode-btn-active {
   background: #0b1220;
   color: #fff;
   border-color: #0b1220;
 }
+
+/* Defensive */
+img { display: block; }
