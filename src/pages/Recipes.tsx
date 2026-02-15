@@ -47,8 +47,6 @@ export default function Recipes() {
   const load = async () => {
     setLoading(true)
     try {
-      // If you have kitchen_id scoping in your app, keep it.
-      // For MVP, load all not archived.
       const { data, error } = await supabase
         .from('recipes')
         .select(
@@ -83,8 +81,6 @@ export default function Recipes() {
 
   const createNew = async () => {
     try {
-      // You likely already set kitchen_id somewhere in your system.
-      // For MVP: try to reuse any existing kitchen_id from first recipe, else fallback.
       const kitchenId = rows[0]?.kitchen_id ?? 'default'
 
       const payload = {
@@ -99,13 +95,12 @@ export default function Recipes() {
       const { data, error } = await supabase.from('recipes').insert(payload).select('id').single()
       if (error) throw error
 
-      showToast('Created ✅')
       const newId = (data as any)?.id
-      if (newId) {
-        window.location.hash = `#/recipe-editor?id=${newId}`
-      } else {
-        await load()
-      }
+      showToast('Created ✅')
+
+      // ✅ FIX: route that actually exists in AppLayout
+      if (newId) window.location.hash = `#/recipe?id=${newId}`
+      else await load()
     } catch (e: any) {
       showToast(e?.message ?? 'Create failed')
     }
@@ -189,9 +184,16 @@ export default function Recipes() {
                 )}
 
                 <div className="mt-4 flex gap-2">
-                  <NavLink className="gc-btn gc-btn-primary" to={`/recipe-editor?id=${r.id}`}>
-                    Open
+                  {/* ✅ FIX: correct route */}
+                  <NavLink className="gc-btn gc-btn-primary" to={`/recipe?id=${r.id}`}>
+                    Open Editor
                   </NavLink>
+
+                  {/* ✅ Optional quick kitchen mode */}
+                  <NavLink className="gc-btn gc-btn-ghost" to={`/cook?id=${r.id}`}>
+                    🍳 Cook
+                  </NavLink>
+
                   <button className="gc-btn gc-btn-ghost" onClick={() => archive(r.id)} type="button">
                     Archive
                   </button>
