@@ -86,7 +86,6 @@ export default function Recipes() {
   const createNew = async () => {
     try {
       const kitchenId = rows[0]?.kitchen_id ?? 'default'
-
       const payload = {
         kitchen_id: kitchenId,
         name: 'New Recipe',
@@ -101,7 +100,6 @@ export default function Recipes() {
 
       const newId = (data as any)?.id
       showToast('Created ✅')
-
       if (newId) window.location.hash = `#/recipe?id=${newId}`
       else await load()
     } catch (e: any) {
@@ -127,7 +125,9 @@ export default function Recipes() {
           <div>
             <div className="gc-label">RECIPES</div>
             <div className="mt-2 text-2xl font-extrabold">Recipe Library</div>
-            <div className="mt-1 text-sm text-neutral-600">Premium Paprika-style cards (fixed aspect + aligned actions).</div>
+            <div className="mt-1 text-sm text-neutral-600">
+              Premium cards (fixed photo ratio + aligned actions).
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -161,38 +161,34 @@ export default function Recipes() {
             const kcal = r.calories != null ? toNum(r.calories, 0) : null
 
             return (
-              <div
-                key={r.id}
-                className="gc-menu-card overflow-hidden transition hover:-translate-y-0.5 hover:shadow-xl"
-              >
-                {/* HERO — Premium: fixed aspect ratio (no distortion) */}
-                <div className="relative w-full aspect-[4/3] overflow-hidden">
-                  {r.photo_url ? (
-                    <img
-                      src={r.photo_url}
-                      alt={r.name}
-                      className="absolute inset-0 h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-neutral-500 bg-neutral-100">
-                      No Photo
+              <div key={r.id} className="gc-menu-card transition hover:-translate-y-0.5 hover:shadow-xl">
+                {/* ✅ HERO FIX: aspect ratio (NO h-44 anywhere) */}
+                <div className="gc-menu-hero">
+                  <div className="relative w-full aspect-[4/3] overflow-hidden">
+                    {r.photo_url ? (
+                      <img
+                        src={r.photo_url}
+                        alt={r.name}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-neutral-500 bg-neutral-100">
+                        No Photo
+                      </div>
+                    )}
+
+                    <div className="gc-menu-overlay" />
+                    <div className="gc-menu-badges">
+                      <span className="gc-chip gc-chip-dark">{cat}</span>
+                      {kcal != null ? <span className="gc-chip">{kcal} kcal</span> : null}
+                      {r.is_subrecipe ? <span className="gc-chip">SUB</span> : null}
                     </div>
-                  )}
-
-                  {/* Premium overlay */}
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-transparent" />
-
-                  {/* Badges */}
-                  <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                    <span className="gc-chip gc-chip-dark">{cat}</span>
-                    {kcal != null ? <span className="gc-chip">{kcal} kcal</span> : null}
-                    {r.is_subrecipe ? <span className="gc-chip">SUB</span> : null}
                   </div>
                 </div>
 
-                {/* BODY — Premium: equal height + actions pinned bottom */}
-                <div className="p-4 flex flex-col h-[240px]">
+                {/* BODY: consistent height, actions pinned */}
+                <div className="p-4 flex flex-col min-h-[240px]">
                   <div>
                     <div className="text-lg font-extrabold leading-tight">{r.name}</div>
                     <div className="mt-1 text-xs text-neutral-500">Portions: {portions}</div>
@@ -210,7 +206,6 @@ export default function Recipes() {
                     )}
                   </div>
 
-                  {/* ACTIONS pinned to bottom */}
                   <div className="mt-auto pt-4 flex gap-2">
                     <NavLink className="gc-btn gc-btn-primary" to={`/recipe?id=${r.id}`}>
                       Open Editor
