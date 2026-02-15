@@ -2,10 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* =========================================
-   GastroChef Visual System v2 — ULTIMATE LOCK
-   (Stability Guardrails + Mode Engine hooks)
-   ========================================= */
+/* === GastroChef Visual System v2 — Ultimate Lock === */
 
 :root {
   --gc-bg: #fafafa;
@@ -22,34 +19,18 @@
   --gc-shadow-soft: 0 10px 25px rgba(15, 23, 42, 0.06);
 }
 
-html, body {
-  height: 100%;
-}
-
+/* Base */
+html, body { height: 100%; }
 body {
   background:
     radial-gradient(1200px 600px at 20% -10%, rgba(107, 143, 58, 0.10), rgba(255, 255, 255, 0)),
     radial-gradient(900px 450px at 90% 0%, rgba(201, 162, 39, 0.10), rgba(255, 255, 255, 0)),
     var(--gc-bg);
   color: var(--gc-text);
-  overflow-x: hidden; /* ✅ prevents accidental horizontal scroll */
 }
 
-/* ✅ Global guardrails: images never stretch weirdly */
-img {
-  max-width: 100%;
-  height: auto;
-  display: block; /* ✅ removes inline-gap + layout jump */
-}
+.container-app { max-width: 1240px; margin: 0 auto; padding: 18px; }
 
-/* Layout helpers */
-.container-app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 18px;
-}
-
-/* Core atoms */
 .gc-card {
   background: var(--gc-card);
   border: 1px solid var(--gc-border);
@@ -62,7 +43,6 @@ img {
   letter-spacing: 0.12em;
   font-weight: 800;
   color: var(--gc-muted);
-  text-transform: uppercase;
 }
 
 .gc-input {
@@ -71,7 +51,6 @@ img {
   padding: 12px 14px;
   background: #fff;
   outline: none;
-  width: 100%;
 }
 
 .gc-input:focus {
@@ -82,12 +61,12 @@ img {
 .gc-btn {
   border-radius: 16px;
   padding: 10px 14px;
-  font-weight: 900;
+  font-weight: 800;
   font-size: 14px;
   border: 1px solid var(--gc-border);
   background: #fff;
   transition: transform 0.05s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  white-space: nowrap; /* ✅ avoids button text wrapping that breaks rows */
+  white-space: nowrap;
 }
 
 .gc-btn:hover {
@@ -95,9 +74,7 @@ img {
   border-color: rgba(15, 23, 42, 0.18);
 }
 
-.gc-btn:active {
-  transform: translateY(1px);
-}
+.gc-btn:active { transform: translateY(1px); }
 
 .gc-btn-primary {
   background: var(--gc-primary);
@@ -111,7 +88,48 @@ img {
   color: var(--gc-text);
 }
 
-/* Small chips */
+/* Premium Menu Preview */
+.gc-menu-card {
+  border: 1px solid var(--gc-border);
+  border-radius: 24px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--gc-shadow);
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+}
+
+.gc-menu-hero {
+  position: relative;
+  width: 100%;
+  background: #f3f4f6;
+  overflow: hidden;
+}
+
+.gc-menu-hero img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gc-menu-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(11, 18, 32, 0.55), rgba(11, 18, 32, 0));
+}
+
+.gc-menu-badges {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  z-index: 2;
+}
+
 .gc-chip {
   display: inline-flex;
   align-items: center;
@@ -133,13 +151,6 @@ img {
   border-color: rgba(255, 255, 255, 0.15);
 }
 
-.gc-chip-warn {
-  background: rgba(245, 158, 11, 0.16);
-  border-color: rgba(245, 158, 11, 0.28);
-  color: rgba(146, 64, 14, 0.98);
-}
-
-/* KPI blocks */
 .gc-kpi {
   border: 1px solid var(--gc-border);
   border-radius: 18px;
@@ -150,7 +161,7 @@ img {
 .gc-kpi-label {
   font-size: 11px;
   color: var(--gc-muted);
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -162,95 +173,62 @@ img {
   color: var(--gc-text);
 }
 
-/* =========================================
-   Premium Recipe Cards — Guardrails (NO DISTORTION)
-   ========================================= */
+/* Cook Mode Pro */
+.gc-range {
+  width: min(520px, 60vw);
+  height: 38px;
+  accent-color: var(--gc-primary);
+}
 
-.gc-menu-card {
-  border: 1px solid var(--gc-border);
-  border-radius: 24px;
-  overflow: hidden; /* ✅ hard clamp */
+.gc-cook-wrap { max-width: 980px; margin: 0 auto; }
+
+.gc-step {
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
   background: #fff;
-  box-shadow: var(--gc-shadow);
-  display: flex;
-  flex-direction: column; /* ✅ prevents overlay chaos */
-  min-width: 0;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.05);
 }
 
-.gc-menu-hero {
-  position: relative;
-  width: 100%;
-  background: #f3f4f6;
-  /* ✅ fixed aspect -> prevents stretch */
-  aspect-ratio: 16 / 10;
-  overflow: hidden;
+.gc-step-done { opacity: 0.72; }
+
+.gc-step-check {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(11, 18, 32, 0.04);
+  display: grid;
+  place-items: center;
 }
 
-.gc-menu-hero > img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* ✅ no distortion */
-  object-position: center;
-}
-
-.gc-menu-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(11, 18, 32, 0.55), rgba(11, 18, 32, 0));
-  pointer-events: none;
-}
-
-.gc-menu-badges {
-  position: absolute;
-  left: 14px;
-  top: 14px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  max-width: calc(100% - 28px);
-  pointer-events: none;
-}
-
-/* ✅ NEW: bottom stats bar inside card */
-.gc-card-stats {
-  margin-top: 10px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.gc-stat {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 10px;
+.gc-step-dot {
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(250, 250, 250, 1);
-  color: rgba(11, 18, 32, 0.90);
-  font-weight: 900;
+  background: rgba(11, 18, 32, 0.20);
+}
+
+.gc-step-done .gc-step-dot { background: rgba(107, 143, 58, 0.90); }
+
+.gc-step-title {
   font-size: 12px;
-}
-
-.gc-stat-muted {
-  color: rgba(102, 112, 133, 1);
+  letter-spacing: 0.12em;
   font-weight: 900;
+  color: rgba(11, 18, 32, 0.65);
+  text-transform: uppercase;
 }
 
-/* =========================================
-   Mode Engine (Kitchen vs Mgmt)
-   We only toggle ONE class on <html>
-   ========================================= */
+.gc-step-badges { display: flex; gap: 8px; }
 
-/* Default = mgmt */
-html.gc-mode-mgmt .gc-kitchen-only { display: none !important; }
-html.gc-mode-kitchen .gc-mgmt-only { display: none !important; }
-
-/* Kitchen mode: focus on execution */
-html.gc-mode-kitchen .gc-card {
-  box-shadow: var(--gc-shadow-soft);
-}
-
-html.gc-mode-kitchen .gc-label {
-  opacity: 0.85;
+/* Print */
+@media print {
+  body { background: #fff !important; }
+  .container-app { max-width: none !important; padding: 0 !important; }
+  aside { display: none !important; }
+  .gc-btn, .gc-input, .gc-range { display: none !important; }
+  .gc-card { box-shadow: none !important; border: 1px solid #ddd !important; }
+  .gc-print-surface { page-break-inside: avoid; }
 }
