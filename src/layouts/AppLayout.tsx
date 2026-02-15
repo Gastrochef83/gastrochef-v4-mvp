@@ -10,6 +10,7 @@ import RecipeEditor from '../pages/RecipeEditor'
 import RecipeCookMode from '../pages/RecipeCookMode'
 
 import ErrorBoundary from '../components/ErrorBoundary'
+import { useMode } from '../state/mode'
 
 function NavItem({ to, label }: { to: string; label: string }) {
   return (
@@ -26,24 +27,12 @@ function NavItem({ to, label }: { to: string; label: string }) {
   )
 }
 
-type Mode = 'mgmt' | 'kitchen'
-
 export default function AppLayout() {
   const location = useLocation()
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
-  // ✅ Mode Engine
-  const [mode, setMode] = useState<Mode>(() => {
-    const saved = (localStorage.getItem('gc_mode') || 'mgmt') as Mode
-    return saved === 'kitchen' ? 'kitchen' : 'mgmt'
-  })
-
-  useEffect(() => {
-    const root = document.documentElement
-    root.classList.remove('gc-mode-mgmt', 'gc-mode-kitchen')
-    root.classList.add(mode === 'kitchen' ? 'gc-mode-kitchen' : 'gc-mode-mgmt')
-    localStorage.setItem('gc_mode', mode)
-  }, [mode])
+  // ✅ Mode Engine from Provider (fixes crash)
+  const { mode, setMode } = useMode()
 
   useEffect(() => {
     let mounted = true
@@ -131,7 +120,6 @@ export default function AppLayout() {
 
           {/* Main */}
           <main className="space-y-6">
-            {/* ✅ CRASH GUARD */}
             <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
