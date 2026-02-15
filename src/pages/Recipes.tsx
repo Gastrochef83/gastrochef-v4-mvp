@@ -126,7 +126,7 @@ export default function Recipes() {
             <div className="gc-label">RECIPES</div>
             <div className="mt-2 text-2xl font-extrabold">Recipe Library</div>
             <div className="mt-1 text-sm text-neutral-600">
-              Grid Ultimate++ (background-image hero, zero distortion).
+              Grid Ultimate++ (clean hero, zero overlap).
             </div>
           </div>
 
@@ -166,16 +166,16 @@ export default function Recipes() {
                   backgroundImage: `url("${r.photo_url}")`,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
+                  backgroundRepeat: 'no-repeat',
                 }
               : {
-                  background:
-                    'linear-gradient(180deg, rgba(0,0,0,0.00), rgba(0,0,0,0.25)), linear-gradient(180deg, #f3f4f6, #e5e7eb)',
+                  background: 'linear-gradient(180deg,#f3f4f6,#e5e7eb)',
                 }
 
             return (
               <div key={r.id} className="gc-menu-card gc-card-ultimate">
-                {/* HERO (ratio lock via padding, and BACKGROUND image = no <img> distortion possible) */}
-                <div className="gc-hero-ratio" style={heroStyle}>
+                {/* HERO (4:3 ratio via CSS class) */}
+                <div className="gc-hero" style={heroStyle}>
                   <div className="gc-hero-overlay" />
 
                   <div className="gc-hero-badges">
@@ -184,20 +184,10 @@ export default function Recipes() {
                     {r.is_subrecipe ? <span className="gc-chip">SUB</span> : null}
                   </div>
 
-                  {/* Quick actions (appears on hover) */}
-                  <div className="gc-hero-actions">
-                    <NavLink className="gc-mini-btn gc-mini-primary" to={`/recipe?id=${r.id}`}>
-                      Open
-                    </NavLink>
-                    <NavLink className="gc-mini-btn" to={`/cook?id=${r.id}`}>
-                      Cook
-                    </NavLink>
-                  </div>
-
                   {!r.photo_url && <div className="gc-hero-nophoto">No Photo</div>}
                 </div>
 
-                {/* BODY (fixed height to align) */}
+                {/* BODY (locked height) */}
                 <div className="gc-card-body">
                   <div>
                     <div className="gc-title">{r.name}</div>
