@@ -29,8 +29,17 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
   return <ModeContext.Provider value={value}>{children}</ModeContext.Provider>
 }
 
+/**
+ * Safe hook: never crashes UI even if provider missing.
+ * Default = mgmt.
+ */
 export function useMode() {
   const ctx = useContext(ModeContext)
-  if (!ctx) throw new Error('useMode must be used within ModeProvider')
+  if (!ctx) {
+    return {
+      mode: 'mgmt' as Mode,
+      setMode: (_m: Mode) => {},
+    }
+  }
   return ctx
 }
