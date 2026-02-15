@@ -14,8 +14,8 @@ function NavItem({ to, label }: { to: string; label: string }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `block rounded-2xl px-4 py-3 text-sm font-semibold ${
-          isActive ? 'bg-neutral-900 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+        `block rounded-xl px-4 py-3 text-sm font-semibold transition ${
+          isActive ? 'bg-neutral-900 text-white shadow' : 'text-neutral-700 hover:bg-neutral-100'
         }`
       }
     >
@@ -55,23 +55,41 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-neutral-100">
       <div className="container-app">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
           {/* Sidebar */}
           <aside className="gc-card p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <div className="text-xs font-semibold text-neutral-500">GastroChef</div>
-                <div className="text-lg font-extrabold text-neutral-900">v4 MVP</div>
+            {/* Brand row */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {/* Logo */}
+                <div className="h-10 w-10 rounded-2xl bg-white border border-neutral-200 flex items-center justify-center overflow-hidden">
+                  <img
+                    src="/logo-gastrochef.png"
+                    alt="GastroChef"
+                    className="h-9 w-9 object-contain"
+                  />
+                </div>
+
+                {/* Name */}
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-neutral-500">GastroChef</div>
+                  <div className="text-lg font-extrabold text-neutral-900">v4 PRO</div>
+                </div>
               </div>
+
               <button className="gc-btn gc-btn-ghost" onClick={onSignOut}>
                 Sign out
               </button>
             </div>
 
-            <div className="mt-3 text-xs text-neutral-500 truncate">{userEmail ? userEmail : '—'}</div>
+            {/* Email */}
+            <div className="mt-3 text-xs text-neutral-500 truncate">
+              {userEmail ? userEmail : '—'}
+            </div>
 
+            {/* Nav */}
             <div className="mt-4 space-y-2">
               <NavItem to="/dashboard" label="Dashboard" />
               <NavItem to="/ingredients" label="Ingredients" />
@@ -79,9 +97,15 @@ export default function AppLayout() {
               <NavItem to="/settings" label="Settings" />
             </div>
 
-            {/* Quick links */}
+            {/* Quick / Status */}
             <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
-              <div className="text-xs font-semibold text-neutral-600">Quick</div>
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold text-neutral-600">Quick</div>
+                <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white border border-neutral-200 text-neutral-600">
+                  MVP → PRO UI
+                </span>
+              </div>
+
               <div className="mt-2 text-xs text-neutral-500">
                 Current: <span className="font-mono">{location.pathname}</span>
               </div>
