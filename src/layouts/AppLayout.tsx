@@ -9,6 +9,8 @@ import Settings from '../pages/Settings'
 import RecipeEditor from '../pages/RecipeEditor'
 import RecipeCookMode from '../pages/RecipeCookMode'
 
+import ErrorBoundary from '../components/ErrorBoundary'
+
 function NavItem({ to, label }: { to: string; label: string }) {
   return (
     <NavLink
@@ -37,7 +39,6 @@ export default function AppLayout() {
   })
 
   useEffect(() => {
-    // apply class to <html>
     const root = document.documentElement
     root.classList.remove('gc-mode-mgmt', 'gc-mode-kitchen')
     root.classList.add(mode === 'kitchen' ? 'gc-mode-kitchen' : 'gc-mode-mgmt')
@@ -130,19 +131,22 @@ export default function AppLayout() {
 
           {/* Main */}
           <main className="space-y-6">
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            {/* ✅ CRASH GUARD */}
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/ingredients" element={<Ingredients />} />
-              <Route path="/recipes" element={<Recipes />} />
-              <Route path="/settings" element={<Settings />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/ingredients" element={<Ingredients />} />
+                <Route path="/recipes" element={<Recipes />} />
+                <Route path="/settings" element={<Settings />} />
 
-              <Route path="/recipe/*" element={<RecipeEditor />} />
-              <Route path="/cook/*" element={<RecipeCookMode />} />
+                <Route path="/recipe/*" element={<RecipeEditor />} />
+                <Route path="/cook/*" element={<RecipeCookMode />} />
 
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </ErrorBoundary>
           </main>
         </div>
       </div>
