@@ -5,41 +5,44 @@ export type Mode = 'kitchen' | 'mgmt'
 type ModeCtx = {
   mode: Mode
   setMode: (m: Mode) => void
+  isKitchen: boolean
+  isMgmt: boolean
 }
 
 const ModeContext = createContext<ModeCtx | null>(null)
 
 export function ModeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<Mode>(() => {
-    const saved = (localStorage.getItem('gc_mode') || 'mgmt').toLowerCase()
-    return saved === 'kitchen' ? 'kitchen' : 'mgmt'
+  const [mode, setMode] = useState<Mode>(() => {
+    try {
+      const saved = localStorage.getItem('gc_mode')
+      return saved === 'mgmt' ? 'mgmt' : 'kitchen'
+    } catch {
+      return 'kitchen'
+    }
   })
 
-  const setMode = (m: Mode) => setModeState(m)
-
   useEffect(() => {
-    const root = document.documentElement
-    root.classList.remove('gc-mode-mgmt', 'gc-mode-kitchen')
-    root.classList.add(mode === 'kitchen' ? 'gc-mode-kitchen' : 'gc-mode-mgmt')
-    localStorage.setItem('gc_mode', mode)
+    try {
+      localStorage.setItem('gc_mode', mode)
+    } catch {}
+    document.documentElement.dataset.mode = mode
   }, [mode])
 
-  const value = useMemo(() => ({ mode, setMode }), [mode])
+  const value = useMemo<ModeCtx>(
+    () => ({
+      mode,
+      setMode,
+      isKitchen: mode === 'kitchen',
+      isMgmt: mode === 'mgmt',
+    }),
+    [mode]
+  )
 
   return <ModeContext.Provider value={value}>{children}</ModeContext.Provider>
 }
 
-/**
- * Safe hook: never crashes UI even if provider missing.
- * Default = mgmt.
- */
 export function useMode() {
   const ctx = useContext(ModeContext)
-  if (!ctx) {
-    return {
-      mode: 'mgmt' as Mode,
-      setMode: (_m: Mode) => {},
-    }
-  }
+  if (!ctx) throw new Error('useMode must be used within ModeProvider')
   return ctx
 }
